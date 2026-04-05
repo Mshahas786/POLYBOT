@@ -259,6 +259,24 @@ def get_status():
         "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0]
     })
 
+@app.route("/stats")
+def get_stats():
+    trades = safe_read_json(TRADES_PATH) or []
+    wins = sum(1 for t in trades if t.get("outcome") == "win")
+    losses = sum(1 for t in trades if t.get("outcome") == "loss")
+    return jsonify({
+        "total_trades": len(trades),
+        "wins": wins,
+        "losses": losses,
+        "success_rate": round((wins / (wins+losses) * 100), 1) if (wins+losses) > 0 else 0,
+        "history": trades[-50:]
+    })
+
+@app.route("/trades")
+def get_trades():
+    trades = safe_read_json(TRADES_PATH) or []
+    return jsonify({"history": trades})
+
 @app.route("/start", methods=["POST"])
 def start_bot():
     global bot_running, bot_thread
