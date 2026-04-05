@@ -32,7 +32,7 @@ start_time = datetime.now(timezone.utc)
 def get_bot_pid():
     if PID_PATH.exists():
         try:
-            pid = int(PID_PATH.read_text().strip())
+            pid = int(PID_PATH.read_text(encoding="utf-8").strip())
             os.kill(pid, 0)
             return pid
         except:
@@ -45,7 +45,7 @@ def is_bot_running():
 def load_trades():
     if TRADES_PATH.exists():
         try:
-            with open(TRADES_PATH) as f:
+            with open(TRADES_PATH, encoding="utf-8") as f:
                 return json.load(f)
         except:
             return []
@@ -104,7 +104,7 @@ def status():
     dry_run = True
     if CONFIG_PATH.exists():
         try:
-            with open(CONFIG_PATH) as f:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
                 cfg = json.load(f)
                 dry_run = cfg.get("dry_run", True)
         except:
@@ -138,12 +138,12 @@ def stop_bot():
 @app.route("/config", methods=["GET", "POST"])
 def handle_config():
     if request.method == "POST":
-        with open(CONFIG_PATH, "w") as f:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(request.get_json(), f, indent=2)
         return jsonify({"status": "saved"})
     
     if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             return jsonify(json.load(f))
     return jsonify({})
 
@@ -152,7 +152,7 @@ def get_logs():
     n = int(request.args.get("n", 100))
     if LOG_PATH.exists():
         try:
-            with open(LOG_PATH, "r") as f:
+            with open(LOG_PATH, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 return jsonify({"logs": [l.strip() for l in lines[-n:]]})
         except:
@@ -168,13 +168,13 @@ def restart_bot():
 @app.route("/clear-logs", methods=["POST"])
 def clear_logs():
     if LOG_PATH.exists():
-        LOG_PATH.write_text("")
+        LOG_PATH.write_text("", encoding="utf-8")
     return jsonify({"status": "cleared"})
 
 @app.route("/clear-trades", methods=["POST"])
 def clear_trades():
     if TRADES_PATH.exists():
-        TRADES_PATH.write_text("[]")
+        TRADES_PATH.write_text("[]", encoding="utf-8")
     return jsonify({"status": "cleared"})
 
 @app.route("/health")

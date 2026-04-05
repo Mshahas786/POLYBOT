@@ -57,7 +57,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(str(LOG_PATH)),
+        logging.FileHandler(str(LOG_PATH), encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
@@ -67,7 +67,7 @@ log = logging.getLogger("polybot")
 def load_env():
     env = {}
     if ENV_PATH.exists():
-        with open(ENV_PATH) as f:
+        with open(ENV_PATH, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if "=" in line and not line.startswith("#"):
@@ -79,7 +79,7 @@ def load_config():
     global config
     if CONFIG_PATH.exists():
         try:
-            with open(CONFIG_PATH) as f:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
                 saved = json.load(f)
             config = {**DEFAULT_CONFIG, **saved}
         except Exception:
@@ -91,7 +91,7 @@ def load_config():
 def load_trades():
     if TRADES_PATH.exists():
         try:
-            with open(TRADES_PATH) as f:
+            with open(TRADES_PATH, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -100,11 +100,11 @@ def load_trades():
 def save_trades(trades):
     if len(trades) > 1000:
         trades = trades[-1000:]
-    with open(TRADES_PATH, "w") as f:
+    with open(TRADES_PATH, "w", encoding="utf-8") as f:
         json.dump(trades, f, indent=2)
 
 def write_pid():
-    with open(PID_PATH, "w") as f:
+    with open(PID_PATH, "w", encoding="utf-8") as f:
         f.write(str(os.getpid()))
 
 def remove_pid():
