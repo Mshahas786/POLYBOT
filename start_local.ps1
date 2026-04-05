@@ -45,15 +45,20 @@ if ($port3000) {
 
 $env:PYTHONUTF8 = 1
 
-Write-Host "Starting API & BOT locally (VISIBLE WINDOWS)..."
-# Start API in a new visible window
+Write-Host "Starting PolyBot Unified Backend (VISIBLE WINDOW)..."
+# Start the Unified API + Bot in a new visible window
 Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd $BotDir; `$env:PYTHONUTF8=1; python api.py" -WindowStyle Normal
-# Start Bot in a new visible window
-Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd $BotDir; `$env:PYTHONUTF8=1; python bot.py" -WindowStyle Normal
 
 Write-Host "Starting Cloudflare Quick Tunnel..."
 if (Test-Path "cloudflared.log") { Remove-Item "cloudflared.log" -Force }
 Start-Process -FilePath $CloudflaredExe -ArgumentList "tunnel --url http://127.0.0.1:3000" -WindowStyle Hidden -RedirectStandardError "cloudflared.log" -RedirectStandardOutput "cloudflared.out"
+
+Write-Host "----------------------------------------------------"
+Write-Host "SUCCESS: PolyBot is now running locally."
+Write-Host "1. Wait 10 seconds for the tunnel to go live."
+Write-Host "2. Copy the green URL from 'cloudflared.log' and paste it into the Dashboard."
+Write-Host "3. Keep the black 'PolyBot Backend' window open!"
+Write-Host "----------------------------------------------------"
 
 Write-Host "Waiting 12 seconds for tunnel to connect..."
 Start-Sleep -Seconds 12
