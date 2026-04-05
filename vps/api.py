@@ -341,6 +341,9 @@ def bot_loop():
             elif window_offset > 240 and window_offset % 30 == 0:
                 log_to_file("⏳ Window closing - entries disabled.")
             
+            # 5. Check Outcomes (resolve past trades)
+            check_outcomes(market_baselines)
+            
             # Cleanup old baselines
             if len(market_baselines) > 20:
                 cutoff = window_ts - 3600
@@ -350,6 +353,50 @@ def bot_loop():
         except Exception as e:
             log_to_file(f"⚠️ Strategy Error: {e}")
             time.sleep(2)
+
+def check_outcomes(baselines):
+    """Check if past trades won or lost by comparing close price vs baseline."""
+    trades = safe_read_json(TRADES_PATH) or []
+    updated = False
+    now = time.time()
+    
+    for t in trades:
+        if t.get("outcome") is not None:
+            continue
+        wts = t.get("window_ts", 0)
+        # Only check after window has fully closed (+30s buffer)
+        if now < wts + 330:
+            continue
+        
+        # Get the close price at end of that window
+        end_ts = wts + 300
+        try:
+            resp = requests.get(
+                f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={end_ts}",
+                timeout=5
+            )
+            close_price = float(resp.json()["Data"]["Data"][-1]["close"])
+        except:
+            continue
+        
+        # Get baseline for that window
+        baseline = baselines.get(wts, t.get("btc_price", 0))
+        
+        # Determine outcome
+        went_up = close_price >= baseline
+        predicted_up = t["direction"] == "UP"
+        win = (predicted_up and went_up) or (not predicted_up and not went_up)
+        
+        t["outcome"] = "win" if win else "loss"
+        t["close_price"] = close_price
+        t["baseline_price"] = baseline
+        updated = True
+        
+        emoji = "✅" if win else "❌"
+        log_to_file(f"{emoji} {t['direction']} | Base: ${baseline} → Close: ${close_price} | {'WIN' if win else 'LOSS'}")
+    
+    if updated:
+        safe_write_json(TRADES_PATH, trades)
 
 def execute_trade(direction, token_price, btc_price, slug, window_ts, confidence, signals, cfg):
     is_dry = cfg.get("dry_run", True)
