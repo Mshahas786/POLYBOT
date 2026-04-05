@@ -245,5 +245,17 @@ def clear_logs():
         return jsonify({"status": "cleared"})
     except: return jsonify({"status": "error"})
 
+@app.route("/restart", methods=["POST"])
+def restart_bot():
+    stop_bot()
+    time.sleep(1)
+    return start_bot()
+
+@app.route("/clear-trades", methods=["POST"])
+def clear_trades():
+    if safe_write_json(TRADES_PATH, []):
+        return jsonify({"status": "cleared"})
+    return jsonify({"status": "error"})
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3000)
