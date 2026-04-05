@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PolyBot">
+    <title>PolyBot Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --card: #16161f;
+            --border: #22222e;
+            --accent: #f0b429;
+            --green: #00d4aa;
+            --red: #ff4757;
+            --text: #e8e8f0;
+            --muted: #6b6b80;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 16px 10px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .logo {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+        }
+
+        .logo span {
+            color: var(--text);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        .pulse.off {
+            background: var(--red);
+            box-shadow: none;
+            animation: none;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 8px var(--green);
+            }
+
+            50% {
+                opacity: 0.5;
+                box-shadow: 0 0 16px var(--green);
+            }
+        }
+
+        .last-update {
+            font-size: 10px;
+            color: var(--muted);
+            font-family: monospace;
+        }
+
+        /* Tab Bar */
+        .tabbar {
+            display: flex;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px 4px 8px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            color: var(--muted);
+            font-size: 10px;
+            font-family: monospace;
+            letter-spacing: 0.05em;
+            transition: color 0.2s;
+        }
+
+        .tab.active {
+            color: var(--accent);
+        }
+
+        .tab-icon {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        /* Pages */
+        .page {
+            display: none;
+            padding: 12px;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-family: monospace;
+            letter-spacing: 0.12em;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .stat-value.green {
+            color: var(--green);
+        }
+
+        .stat-value.red {
+            color: var(--red);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        /* Log entries */
+        .log-entry {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+            font-family: monospace;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border);
+            line-height: 1.4;
+        }
+
+        .log-time {
+            color: var(--muted);
+            flex-shrink: 0;
+        }
+
+        .log-msg {
+            color: var(--text);
+            word-break: break-word;
+        }
+
+        .log-msg.found {
+            color: var(--green);
+        }
+
+        .log-msg.error {
+            color: var(--red);
+        }
+
+        .log-msg.connected {
+            color: var(--accent);
+        }
+
+        /* Refresh button */
+        .refresh-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--accent);
+            background: rgba(240, 180, 41, 0.1);
+            color: var(--accent);
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 0.08em;
+            margin-bottom: 12px;
+        }
+
+        /* Settings */
+        .setting-group {
+            margin-bottom: 14px;
+        }
+
+        .setting-label {
+            font-size: 11px;
+            color: var(--muted);
+            font-family: monospace;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .setting-input {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: monospace;
+            outline: none;
+        }
+
+        .setting-hint {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        .save-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent);
+            color: #000;
+            font-size: 14px;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 0.08em;
+        }
+
+        .info-box {
+            background: rgba(240, 180, 41, 0.1);
+            border: 1px solid rgba(240, 180, 41, 0.3);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 12px;
+            color: var(--text);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--muted);
+            font-family: monospace;
+            font-size: 13px;
+            padding: 30px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate {
+            animation: slideUp 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-top">
+            <div class="logo">POLY<span>BOT</span></div>
+            <div class="status-badge">
+                <div class="pulse" id="statusDot"></div>
+                <span id="statusText" style="color: var(--green)">LIVE</span>
+            </div>
+        </div>
+        <div class="last-update" id="lastUpdate">Connecting to VPS...</div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tabbar">
+        <button class="tab active" onclick="showTab('dashboard', this)">
+            <span class="tab-icon">◈</span>Dashboard
+        </button>
+        <button class="tab" onclick="showTab('logs', this)">
+            <span class="tab-icon">📋</span>Logs
+        </button>
+        <button class="tab" onclick="showTab('settings', this)">
+            <span class="tab-icon">⚙</span>Settings
+        </button>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div class="page active" id="page-dashboard">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value green" id="statMarkets">--</div>
+                <div class="stat-label">Markets Scanned</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statStatus">--</div>
+                <div class="stat-label">Bot Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statScans">--</div>
+                <div class="stat-label">Total Scans</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value green" id="statUptime">--</div>
+                <div class="stat-label">VPS Uptime</div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="fetchStatus()">⟳ REFRESH</button>
+
+        <div class="card">
+            <div class="card-title">LATEST ACTIVITY</div>
+            <div id="latestLogs">
+                <div class="loading">
+                    <div class="spinner"></div><br>Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Page -->
+    <div class="page" id="page-logs">
+        <button class="refresh-btn" onclick="fetchStatus()">⟳ REFRESH LOGS</button>
+        <div class="card">
+            <div class="card-title">FULL BOT LOG</div>
+            <div id="fullLogs">
+                <div class="loading">
+                    <div class="spinner"></div><br>Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+        <div class="info-box">
+            ⚡ This dashboard connects to your Oracle VPS bot running at <strong>152.67.120.35</strong>. Change the URL
+            below if your IP changes.
+        </div>
+
+        <div class="card">
+            <div class="card-title">VPS CONNECTION</div>
+
+            <div class="setting-group">
+                <label class="setting-label">VPS API URL</label>
+                <input class="setting-input" id="vpsUrl" value="http://152.67.120.35:3000">
+                <div class="setting-hint">Your Oracle Cloud VPS Flask API</div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">AUTO REFRESH</label>
+                <select class="setting-input" id="refreshInterval">
+                    <option value="30000">Every 30 seconds</option>
+                    <option value="60000" selected>Every 1 minute</option>
+                    <option value="300000">Every 5 minutes</option>
+                    <option value="0">Manual only</option>
+                </select>
+            </div>
+
+            <button class="save-btn" onclick="saveSettings()">SAVE & CONNECT</button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">ABOUT</div>
+            <div style="font-size: 12px; color: var(--muted); line-height: 1.8; font-family: monospace;">
+                <div>Bot: Polymarket Value Hunter</div>
+                <div>VPS: Oracle Cloud Free Tier</div>
+                <div>Server: 152.67.120.35</div>
+                <div>Markets: 1000+ scanned</div>
+                <div>Scan interval: 5 minutes</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let VPS_URL = localStorage.getItem('vpsUrl') || 'http://152.67.120.35:3000';
+        let scanCount = 0;
+        let autoRefreshTimer = null;
+
+        // Load saved settings
+        document.getElementById('vpsUrl').value = VPS_URL;
+
+        function showTab(name, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('page-' + name).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        function saveSettings() {
+            VPS_URL = document.getElementById('vpsUrl').value.trim();
+            localStorage.setItem('vpsUrl', VPS_URL);
+            const interval = parseInt(document.getElementById('refreshInterval').value);
+            setupAutoRefresh(interval);
+            fetchStatus();
+            alert('Settings saved! Connecting...');
+        }
+
+        function setupAutoRefresh(interval) {
+            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            if (interval > 0) {
+                autoRefreshTimer = setInterval(fetchStatus, interval);
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                document.getElementById('lastUpdate').textContent = 'Refreshing...';
+
+                const response = await fetch(VPS_URL + '/status', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+
+                const data = await response.json();
+                updateDashboard(data);
+
+            } catch (err) {
+                console.error('Fetch error:', err);
+                setOffline(err.message);
+            }
+        }
+
+        function updateDashboard(data) {
+            const now = new Date().toLocaleTimeString();
+
+            // Update header
+            document.getElementById('statusDot').classList.remove('off');
+            document.getElementById('statusText').textContent = 'LIVE';
+            document.getElementById('statusText').style.color = 'var(--green)';
+            document.getElementById('lastUpdate').textContent = 'Updated ' + now;
+
+            // Parse logs
+            const logs = data.logs || [];
+            scanCount = logs.filter(l => l.includes('Found')).length;
+
+            // Extract market count
+            let marketCount = '--';
+            const foundLog = [...logs].reverse().find(l => l.includes('Found'));
+            if (foundLog) {
+                const match = foundLog.match(/Found (\d+)/);
+                if (match) marketCount = match[1];
+            }
+
+            // Update stats
+            document.getElementById('statMarkets').textContent = marketCount;
+            document.getElementById('statStatus').textContent = data.running ? '🟢 ON' : '🔴 OFF';
+            document.getElementById('statStatus').style.color = data.running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('statScans').textContent = scanCount;
+            document.getElementById('statUptime').textContent = '24/7';
+
+            // Update latest logs (last 5)
+            const latestDiv = document.getElementById('latestLogs');
+            const last5 = logs.slice(-5).reverse();
+            latestDiv.innerHTML = last5.map(log => formatLog(log)).join('');
+
+            // Update full logs
+            const fullDiv = document.getElementById('fullLogs');
+            fullDiv.innerHTML = [...logs].reverse().map(log => formatLog(log)).join('');
+        }
+
+        function formatLog(log) {
+            const parts = log.split(' ');
+            const time = parts[1] ? parts[1].split(',')[0] : '';
+            const msg = parts.slice(2).join(' ');
+
+            let msgClass = 'log-msg';
+            if (msg.includes('Found') || msg.includes('Connected')) msgClass += ' found';
+            if (msg.includes('error') || msg.includes('Error')) msgClass += ' error';
+            if (msg.includes('Connected')) msgClass += ' connected';
+
+            return `<div class="log-entry animate">
+      <span class="log-time">${time}</span>
+      <span class="${msgClass}">${msg || log}</span>
+    </div>`;
+        }
+
+        function setOffline(error) {
+            document.getElementById('statusDot').classList.add('off');
+            document.getElementById('statusText').textContent = 'OFFLINE';
+            document.getElementById('statusText').style.color = 'var(--red)';
+            document.getElementById('lastUpdate').textContent = 'Error: ' + error;
+            document.getElementById('statStatus').textContent = '🔴 OFF';
+            document.getElementById('statStatus').style.color = 'var(--red)';
+
+            const errHtml = `<div style="color:var(--red);font-family:monospace;font-size:12px;padding:10px;">
+      ❌ Cannot connect to VPS<br>
+      <span style="color:var(--muted)">${error}</span><br><br>
+      Check VPS URL in Settings tab.
+    </div>`;
+            document.getElementById('latestLogs').innerHTML = errHtml;
+            document.getElementById('fullLogs').innerHTML = errHtml;
+        }
+
+        // Start
+        fetchStatus();
+        setupAutoRefresh(60000);
+    </script>
+</body>
+
+</html>
