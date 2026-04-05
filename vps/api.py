@@ -28,6 +28,27 @@ PID_PATH = BOT_DIR / "bot.pid"
 bot_process = None
 start_time = datetime.now(timezone.utc)
 
+# ── Safe File Readers (Windows Helper) ─────────────────────
+def safe_read_json(path):
+    for _ in range(5):
+        try:
+            if not path.exists(): return None
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (PermissionError, json.JSONDecodeError):
+            time.sleep(0.1)
+    return None
+
+def safe_read_lines(path, n=100):
+    for _ in range(5):
+        try:
+            if not path.exists(): return []
+            with open(path, "r", encoding="utf-8") as f:
+                return f.readlines()[-n:]
+        except PermissionError:
+            time.sleep(0.1)
+    return []
+
 # ── Helpers ────────────────────────────────────────────────
 def get_bot_pid():
     if PID_PATH.exists():
@@ -43,13 +64,8 @@ def is_bot_running():
     return get_bot_pid() is not None
 
 def load_trades():
-    if TRADES_PATH.exists():
-        try:
-            with open(TRADES_PATH, encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
+    trades = safe_read_json(TRADES_PATH)
+    return trades if trades is not None else []
 
 # ── Routes ─────────────────────────────────────────────────
 
@@ -101,14 +117,8 @@ def status():
     losses = sum(1 for t in trades if t.get("outcome") == "loss")
     
     # Load dry_run from config
-    dry_run = True
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                cfg = json.load(f)
-                dry_run = cfg.get("dry_run", True)
-        except:
-            pass
+    cfg = safe_read_json(CONFIG_PATH) or {}
+    dry_run = cfg.get("dry_run", True)
 
     return jsonify({
         "running": running,
@@ -138,26 +148,21 @@ def stop_bot():
 @app.route("/config", methods=["GET", "POST"])
 def handle_config():
     if request.method == "POST":
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(request.get_json(), f, indent=2)
-        return jsonify({"status": "saved"})
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(request.get_json(), f, indent=2)
+            return jsonify({"status": "saved"})
+        except PermissionError:
+            return jsonify({"status": "error", "message": "File locked"}), 503
     
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, encoding="utf-8") as f:
-            return jsonify(json.load(f))
-    return jsonify({})
+    cfg = safe_read_json(CONFIG_PATH)
+    return jsonify(cfg if cfg is not None else {})
 
 @app.route("/logs")
 def get_logs():
     n = int(request.args.get("n", 100))
-    if LOG_PATH.exists():
-        try:
-            with open(LOG_PATH, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                return jsonify({"logs": [l.strip() for l in lines[-n:]]})
-        except:
-            return jsonify({"logs": []})
-    return jsonify({"logs": []})
+    lines = safe_read_lines(LOG_PATH, n)
+    return jsonify({"logs": [l.strip() for l in lines]})
 
 @app.route("/restart", methods=["POST"])
 def restart_bot():

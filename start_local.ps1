@@ -27,19 +27,18 @@ if (-Not (Test-Path $CloudflaredExe)) {
 Set-Location $BotDir
 
 Write-Host "Stopping any previous local instances..."
-if (Test-Path "bot.pid") {
-    $pidToKill = Get-Content "bot.pid"
-    Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+# Kill any python processes running bot.py or api.py in the polybot folder
+Get-WmiObject Win32_Process | Where-Object { 
+    $_.CommandLine -match "api.py" -or $_.CommandLine -match "bot.py" -or $_.CommandLine -match "cloudflared"
+} | ForEach-Object { 
+    try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} 
 }
 
-# Kill anything on port 3000 (the API)
+# Final check for port 3000
 $port3000 = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
 if ($port3000) {
     Stop-Process -Id $port3000.OwningProcess -Force -ErrorAction SilentlyContinue
 }
-
-# Kill old local cloudflared tunnels
-Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'cloudflared' -and $_.ExecutablePath -match 'polybot' } | Invoke-CimMethod -MethodName Terminate | Out-Null
 
 $env:PYTHONUTF8 = 1
 
