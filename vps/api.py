@@ -135,6 +135,36 @@ def handle_config():
             return jsonify(json.load(f))
     return jsonify({})
 
+@app.route("/logs")
+def get_logs():
+    n = int(request.args.get("n", 100))
+    if LOG_PATH.exists():
+        try:
+            with open(LOG_PATH, "r") as f:
+                lines = f.readlines()
+                return jsonify({"logs": [l.strip() for l in lines[-n:]]})
+        except:
+            return jsonify({"logs": []})
+    return jsonify({"logs": []})
+
+@app.route("/restart", methods=["POST"])
+def restart_bot():
+    stop_bot()
+    time.sleep(1)
+    return start_bot()
+
+@app.route("/clear-logs", methods=["POST"])
+def clear_logs():
+    if LOG_PATH.exists():
+        LOG_PATH.write_text("")
+    return jsonify({"status": "cleared"})
+
+@app.route("/clear-trades", methods=["POST"])
+def clear_trades():
+    if TRADES_PATH.exists():
+        TRADES_PATH.write_text("[]")
+    return jsonify({"status": "cleared"})
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()})
