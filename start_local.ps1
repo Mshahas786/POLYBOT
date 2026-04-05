@@ -41,6 +41,8 @@ if ($port3000) {
 # Kill old local cloudflared tunnels
 Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'cloudflared' -and $_.ExecutablePath -match 'polybot' } | Invoke-CimMethod -MethodName Terminate | Out-Null
 
+$env:PYTHONUTF8 = 1
+
 Write-Host "Starting API & BOT locally in background..."
 Start-Process -FilePath "python" -ArgumentList "api.py" -WindowStyle Hidden -RedirectStandardOutput "api.log" -RedirectStandardError "api.err"
 Start-Process -FilePath "python" -ArgumentList "bot.py" -WindowStyle Hidden -RedirectStandardOutput "bot.log" -RedirectStandardError "bot.err"
