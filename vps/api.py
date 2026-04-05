@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v2.8
-Fixed BTC 5m Strategy: Outcome Prices & Baseline Sync.
+PolyBot Unified Backend v2.9
+Precision Baseline Sync: Official Polymarket "Line" Integration.
 """
 
 import json
@@ -128,6 +128,18 @@ def get_polymarket_market(slug):
         log_to_file(f"⚠️ Gamma API Error: {e}")
         return None
 
+def get_clob_market_line(condition_id):
+    """Fetch official strike price (the 'line') from CLOB API."""
+    try:
+        resp = requests.get(f"https://clob.polymarket.com/markets/{condition_id}", timeout=5)
+        data = resp.json()
+        if data and "line" in data:
+            return float(data["line"])
+        return None
+    except Exception as e:
+        log_to_file(f"⚠️ CLOB Metadata Error: {e}")
+        return None
+
 def get_current_5min_ts():
     return (int(time.time()) // 300) * 300
 
@@ -153,15 +165,13 @@ def bot_loop():
                 time.sleep(5)
                 continue
             
+            condition_id = market.get("conditionId")
+            
             # Extract Odds (outcomePrices instead of tokens)
             outcomes = market.get("outcomePrices", [])
-            # Handle stringified list (Common in Gamma API)
             if isinstance(outcomes, str):
-                try:
-                    outcomes = json.loads(outcomes)
-                except:
-                    # Fallback for old formatting if any
-                    outcomes = outcomes.strip("[]").split(",")
+                try: outcomes = json.loads(outcomes)
+                except: outcomes = outcomes.strip("[]").split(",")
             
             if len(outcomes) < 2: 
                 time.sleep(5)
@@ -170,19 +180,28 @@ def bot_loop():
             up_price = float(outcomes[0])
             down_price = float(outcomes[1])
             
-            # 2. Get Price to Beat (Start Price)
-            # Use historical minute endpoint for the exact window start (Chainlink sync)
+            # 2. Get Official "Price to Beat" (Strike Price)
+            # Prioritize the CLOB 'line' for exact sync
             if window_ts not in market_start_prices:
-                try:
-                    # v2/histominute?limit=1&toTs={ts}
-                    resp = requests.get(f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={window_ts}", timeout=5)
-                    market_start_prices[window_ts] = float(resp.json()["Data"]["Data"][-1]["close"])
-                    log_to_file(f"📍 Baseline Sync for {window_ts} | Price To Beat: ${market_start_prices[window_ts]}")
-                except Exception as e:
-                    # Fallback to current live price if historical API fails
-                    with price_lock:
-                        market_start_prices[window_ts] = last_btc_price
-                    log_to_file(f"⚠️ Hist Price Sync failed: {e}. Using current: {market_start_prices[window_ts]}!")
+                # Try fetching from CLOB metadata (exact strike)
+                official_line = None
+                if condition_id:
+                    official_line = get_clob_market_line(condition_id)
+                
+                if official_line:
+                    market_start_prices[window_ts] = official_line
+                    log_to_file(f"🎯 Official Sync for {window_ts} | Price To Beat: ${official_line}")
+                else:
+                    # Fallback to historical minute endpoint (Chainlink approx sync)
+                    try:
+                        resp = requests.get(f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={window_ts}", timeout=5)
+                        market_start_prices[window_ts] = float(resp.json()["Data"]["Data"][-1]["open"])
+                        log_to_file(f"📍 Baseline approx sync failed. Using historical open: ${market_start_prices[window_ts]}")
+                    except Exception as e:
+                        # Fallback to current live price if all APIs fail
+                        with price_lock:
+                            market_start_prices[window_ts] = last_btc_price
+                        log_to_file(f"⚠️ Extreme sync fallback. Using live: {market_start_prices[window_ts]}!")
 
             price_to_beat = market_start_prices[window_ts]
             with price_lock:
@@ -238,7 +257,7 @@ def execute_trade(direction, token_price, btc_price, slug, window_ts, cfg):
         "outcome": None
     }
     
-    log_to_file(f"🎯 EDGE TRIGGERED: {direction} | BTC {btc_price} | Price: {token_price}")
+    log_to_file(f"🚀 EDGE TRIGGERED: {direction} | BTC {btc_price} | Price: {token_price}")
     trades = safe_read_json(TRADES_PATH) or []
     trades.append(trade)
     safe_write_json(TRADES_PATH, trades)
