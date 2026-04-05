@@ -1027,9 +1027,13 @@
             // Stats
             document.getElementById('statStatus').textContent = data.running ? '🟢 ON' : '🔴 OFF';
             document.getElementById('statStatus').style.color = data.running ? 'var(--green)' : 'var(--red)';
-            document.getElementById('statTrades').textContent = data.total_trades || 0;
-            document.getElementById('statUp').textContent = data.up_trades || 0;
-            document.getElementById('statDown').textContent = data.down_trades || 0;
+            
+            if (document.getElementById('statSuccess')) {
+                document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
+            }
+            
+            document.getElementById('statUp').textContent = data.wins || 0;
+            document.getElementById('statDown').textContent = data.losses || 0;
 
             // Button states
             document.getElementById('btnStart').disabled = data.running;
