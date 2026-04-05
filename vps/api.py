@@ -155,6 +155,14 @@ def bot_loop():
             
             # Extract Odds (outcomePrices instead of tokens)
             outcomes = market.get("outcomePrices", [])
+            # Handle stringified list (Common in Gamma API)
+            if isinstance(outcomes, str):
+                try:
+                    outcomes = json.loads(outcomes)
+                except:
+                    # Fallback for old formatting if any
+                    outcomes = outcomes.strip("[]").split(",")
+            
             if len(outcomes) < 2: 
                 time.sleep(5)
                 continue
