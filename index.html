@@ -1109,7 +1109,9 @@
                     </div>
                 `;
                 if (!document.getElementById('strategyOverlay')) {
-                    document.querySelector('.dashboard-stats').prepend(overlay);
+                    const container = document.querySelector('.stats-grid');
+                    if (container) container.parentNode.insertBefore(overlay, container);
+                    else document.getElementById('page-dashboard').prepend(overlay);
                 }
             } else if (document.getElementById('strategyOverlay')) {
                 document.getElementById('strategyOverlay').remove();
