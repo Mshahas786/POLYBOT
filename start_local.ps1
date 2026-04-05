@@ -18,7 +18,7 @@ if (-Not (Test-Path "$BotDir\.env")) {
 }
 
 Write-Host "Installing Python Dependencies..."
-python -m pip install flask flask-cors requests
+python -m pip install flask flask-cors requests websocket-client
 
 # Download cloudflared for windows
 $CloudflaredExe = "$BotDir\cloudflared.exe"

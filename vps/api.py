@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v2.6
-BTC 5-Minute "Price to Beat" Strategy Implementation.
+PolyBot Unified Backend v2.7
+Advanced "Edge" Strategy with Binance WebSockets & Odds Analysis.
 """
 
 import json
@@ -9,6 +9,7 @@ import os
 import time
 import threading
 import requests
+import websocket
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from flask import Flask, jsonify, request
@@ -28,14 +29,57 @@ ENV_PATH = BOT_DIR / ".env"
 start_time = datetime.now(timezone.utc)
 bot_running = False
 bot_thread = None
-price_history = []
 env_keys = {}
+
+# Fast Price Feed State
+last_btc_price = 0
+price_lock = threading.Lock()
+
 current_strategy_info = {
-    "market": "N/A",
+    "slug": "N/A",
     "price_to_beat": 0,
     "current_diff": 0,
-    "time_remaining": 0
+    "time_remaining": 0,
+    "up_price": 0,
+    "down_price": 0,
+    "edge": "None"
 }
+
+# ── Binance WebSocket Client ───────────────────────────────
+class BinanceWS:
+    def __init__(self):
+        self.url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
+        self.ws = None
+        self.thread = None
+
+    def on_message(self, ws, message):
+        global last_btc_price
+        data = json.loads(message)
+        with price_lock:
+            last_btc_price = float(data['p'])
+
+    def on_error(self, ws, error):
+        print(f"WS Error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        print("### WS Closed ###")
+
+    def run(self):
+        self.ws = websocket.WebSocketApp(
+            self.url,
+            on_message=self.on_message,
+            on_error=self.on_error,
+            on_close=self.on_close
+        )
+        self.ws.run_forever()
+
+    def start(self):
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+# Start WebSocket immediately
+ws_client = BinanceWS()
+ws_client.start()
 
 # ── Safe File Helpers ─────────────────────────────────────
 def safe_read_json(path):
@@ -71,123 +115,121 @@ def log_to_file(msg):
             time.sleep(0.1)
 
 # ── Data Sources ──────────────────────────────────────────
-def get_btc_price():
-    """Fetch BTC price from CryptoCompare (User's preferred source)."""
+def get_polymarket_market(slug):
+    """Fetch market details from Gamma API."""
     try:
-        resp = requests.get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD", timeout=5)
-        return float(resp.json()["USD"])
-    except:
-        # Fallback to Binance
-        try:
-            resp = requests.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": "BTCUSDT"}, timeout=5)
-            return float(resp.json()["price"])
-        except: return None
+        resp = requests.get(f"https://gamma-api.polymarket.com/markets?slug={slug}", timeout=5)
+        data = resp.json()
+        if data and len(data) > 0:
+            return data[0]
+    except: return None
 
-def get_active_5m_markets():
-    """Fetch active BTC 5m markets from Polymarket Gamma API."""
-    try:
-        # Query Gamma API for BTC markets
-        resp = requests.get("https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=20", timeout=10)
-        markets = resp.json()
-        
-        filtered = []
-        for m in markets:
-            q = m.get("question", "").lower()
-            if "bitcoin" in q and "5" in q and "-5m-" in m.get("slug", ""):
-                filtered.append(m)
-        return filtered
-    except Exception as e:
-        log_to_file(f"⚠️ Market Scan Failed: {e}")
-        return []
+def get_current_5min_ts():
+    return (int(time.time()) // 300) * 300
 
 # ── Bot Loop & Strategy ───────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info
-    log_to_file("🤖 BTC 5M STRATEGY ENGINE STARTING...")
+    log_to_file("🚀 ADVANCED EDGE ENGINE STARTING...")
     
-    market_start_prices = {} # slug -> price_to_beat
+    market_start_prices = {} # window_ts -> price_to_beat
     
     while bot_running:
         try:
-            cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True, "bet_size": 2.0}
-            now_dt = datetime.now(timezone.utc)
+            cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True}
+            now = time.time()
+            window_ts = get_current_5min_ts()
+            window_offset = int(now % 300)
+            slug = f"btc-updown-5m-{window_ts}"
             
-            # 1. Scan for markets
-            markets = get_active_5m_markets()
-            if not markets:
-                time.sleep(10)
+            # 1. Fetch Market Details
+            market = get_polymarket_market(slug)
+            if not market:
+                time.sleep(5)
                 continue
             
-            # Process the "soonest" market
-            m = markets[0]
-            slug = m.get("slug")
-            end_time_str = m.get("endDate")
-            if not end_time_str: continue
+            # Extract Tokens (0: UP, 1: DOWN)
+            tokens = market.get("tokens", [])
+            if len(tokens) < 2: continue
             
-            end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
-            time_remaining = (end_dt - now_dt).total_seconds()
+            up_price = float(tokens[0].get("price", 0.5))
+            down_price = float(tokens[1].get("price", 0.5))
             
             # 2. Get Price to Beat (Start Price)
-            # For 5m markets, they open at every 5m mark (00, 05, 10...)
-            # We track the price at the beginning of THIS market's window.
-            if slug not in market_start_prices:
-                # If we just found a new market, its start price was from ~5 mins ago
-                # But the user strategy says: "Store price_to_beat at start of each 5-min window"
-                market_start_prices[slug] = get_btc_price()
-                log_to_file(f"📍 New Market Detected: {slug} | Price to Beat: {market_start_prices[slug]}")
-            
-            price_to_beat = market_start_prices[slug]
-            price_now = get_btc_price()
+            # Use CryptoCompare for the "Resolution Start" baseline if possible, or Binance at window start.
+            if window_ts not in market_start_prices:
+                try:
+                    # Fetching the price at the interval start
+                    resp = requests.get(f"https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts={window_ts}", timeout=5)
+                    market_start_prices[window_ts] = float(resp.json()["BTC"]["USD"])
+                except:
+                    with price_lock:
+                        market_start_prices[window_ts] = last_btc_price
+                log_to_file(f"📍 New Window {window_ts} | Price to Beat: {market_start_prices[window_ts]}")
+
+            price_to_beat = market_start_prices[window_ts]
+            with price_lock:
+                price_now = last_btc_price
             
             if price_now and price_to_beat:
                 diff = (price_now - price_to_beat) / price_to_beat * 100
                 
-                # Update Dashboard Info
+                # Update Info
                 current_strategy_info = {
-                    "market": slug,
+                    "slug": slug,
                     "price_to_beat": price_to_beat,
                     "current_diff": round(diff, 3),
-                    "time_remaining": int(time_remaining)
+                    "time_remaining": 300 - window_offset,
+                    "up_price": up_price,
+                    "down_price": down_price,
+                    "edge": "None"
                 }
-                
-                # 3. Decision Rules
-                if time_remaining > 60:
-                    # Check if already traded in this slug
+
+                # 3. Timing Rules (60-240 Range)
+                if 60 <= window_offset <= 240:
+                    # Check if already traded in this window
                     trades = safe_read_json(TRADES_PATH) or []
-                    already_traded = any(t.get("market_slug") == slug for t in trades)
+                    already_traded = any(t.get("window_ts") == window_ts for t in trades)
                     
                     if not already_traded:
-                        if diff > 0.3:
-                            execute_trade("UP", 90.0, price_now, slug, cfg)
-                        elif diff < -0.3:
-                            execute_trade("DOWN", 90.0, price_now, slug, cfg)
+                        # EDGE LOGIC
+                        if diff > 0.3 and up_price < 0.55:
+                            current_strategy_info["edge"] = "UP triggered"
+                            execute_trade("UP", up_price, price_now, slug, window_ts, cfg)
+                        elif diff < -0.3 and down_price < 0.55:
+                            current_strategy_info["edge"] = "DOWN triggered"
+                            execute_trade("DOWN", down_price, price_now, slug, window_ts, cfg)
             
-            # Cleanup old slugs
-            if len(market_start_prices) > 10:
-                market_start_prices = {k: v for i, (k, v) in enumerate(market_start_prices.items()) if i > 5}
+            # 4. Success Tracking (Log win/loss of previous window)
+            prev_window = window_ts - 300
+            if prev_window in market_start_prices:
+                # We can check outcome here by calling CryptoCompare for window_ts price
+                # Or just let check_outcomes handle it.
+                pass
 
-            time.sleep(10) # Scan frequency
+            time.sleep(2) # High speed strategy checks
         except Exception as e:
-            log_to_file(f"⚠️ Strategy Loop Error: {e}")
-            time.sleep(5)
+            log_to_file(f"⚠️ Edge Strategy Error: {e}")
+            time.sleep(2)
 
-def execute_trade(direction, confidence, price, slug, cfg):
+def execute_trade(direction, token_price, btc_price, slug, window_ts, cfg):
     is_dry = cfg.get("dry_run", True)
     status = "simulated" if is_dry else "placed"
     
     trade = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "window_ts": window_ts,
         "market_slug": slug,
         "direction": direction,
-        "confidence": confidence,
-        "btc_price": price,
-        "bet_size": 2.0, # Strategy forced $2
+        "token_price": token_price,
+        "btc_price": btc_price,
+        "bet_size": 2.0,
         "dry_run": is_dry,
         "status": status,
         "outcome": None
     }
     
-    log_to_file(f"🚀 {status.upper()} TRADE on {slug}: {direction} @ {price}")
+    log_to_file(f"🎯 EDGE TRIGGERED: {direction} | BTC {btc_price} | Price: {token_price}")
     trades = safe_read_json(TRADES_PATH) or []
     trades.append(trade)
     safe_write_json(TRADES_PATH, trades)
@@ -201,10 +243,14 @@ def get_status():
     losses = sum(1 for t in trades if t.get("outcome") == "loss")
     cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True}
     
+    with price_lock:
+        live_price = last_btc_price
+
     return jsonify({
         "running": bot_running,
         "dry_run": cfg.get("dry_run", True),
-        "strategy": "BTC 5m PriceToBeat",
+        "btc_price": live_price,
+        "strategy": "Advanced Edge (WS)",
         "info": current_strategy_info,
         "total_trades": len(trades),
         "wins": wins,
@@ -212,11 +258,6 @@ def get_status():
         "success_rate": round((wins / (wins+losses) * 100), 1) if (wins+losses) > 0 else 0,
         "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0]
     })
-
-@app.route("/stats")
-def get_stats():
-    trades = safe_read_json(TRADES_PATH) or []
-    return jsonify({"history": trades[-50:]})
 
 @app.route("/start", methods=["POST"])
 def start_bot():
@@ -232,7 +273,6 @@ def start_bot():
 def stop_bot():
     global bot_running
     bot_running = False
-    log_to_file("🛑 BOT STOPPED VIA DASHBOARD")
     return jsonify({"status": "stopped"})
 
 @app.route("/config", methods=["GET", "POST"])
@@ -244,32 +284,18 @@ def handle_config():
 
 @app.route("/logs")
 def get_logs():
-    n = int(request.args.get("n", 100))
     if not LOG_PATH.exists(): return jsonify({"logs": []})
     try:
         with open(LOG_PATH, "r", encoding="utf-8") as f:
             lines = f.readlines()
-            return jsonify({"logs": [l.strip() for l in lines[-n:]]})
+            return jsonify({"logs": [l.strip() for l in lines[-100:]]})
     except: return jsonify({"logs": []})
-
-@app.route("/clear-logs", methods=["POST"])
-def clear_logs():
-    try:
-        with open(LOG_PATH, "w", encoding="utf-8") as f: f.write("")
-        return jsonify({"status": "cleared"})
-    except: return jsonify({"status": "error"})
 
 @app.route("/restart", methods=["POST"])
 def restart_bot():
     stop_bot()
     time.sleep(1)
     return start_bot()
-
-@app.route("/clear-trades", methods=["POST"])
-def clear_trades():
-    if safe_write_json(TRADES_PATH, []):
-        return jsonify({"status": "cleared"})
-    return jsonify({"status": "error"})
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3000)

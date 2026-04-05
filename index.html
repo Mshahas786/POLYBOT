@@ -1068,6 +1068,11 @@
             document.getElementById('statStatus').textContent = data.running ? '🟢 ON' : '🔴 OFF';
             document.getElementById('statStatus').style.color = data.running ? 'var(--green)' : 'var(--red)';
             
+            // Show real-time BTC price from WS
+            if (data.btc_price) {
+                document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
             if (document.getElementById('statSuccess')) {
                 document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
             }
@@ -1087,16 +1092,20 @@
                 overlay.className = 'strategy-overlay';
                 overlay.innerHTML = `
                     <div class="stat-group">
-                        <span class="label">🎯 Price to Beat</span>
+                        <span class="label">🎯 Target</span>
                         <span class="value">$${info.price_to_beat.toLocaleString()}</span>
                     </div>
                     <div class="stat-group">
-                        <span class="label">⏳ Time Left</span>
-                        <span class="value ${info.time_remaining < 120 ? 'warning' : ''}">${info.time_remaining}s</span>
+                        <span class="label">📊 Diff</span>
+                        <span class="value ${info.current_diff > 0.3 ? 'up' : info.current_diff < -0.3 ? 'down' : ''}">${info.current_diff}%</span>
                     </div>
                     <div class="stat-group">
-                        <span class="label">📊 Diff %</span>
-                        <span class="value ${info.current_diff > 0.3 ? 'up' : info.current_diff < -0.3 ? 'down' : ''}">${info.current_diff}%</span>
+                        <span class="label">🎲 Odds (U/D)</span>
+                        <span class="value">${Math.round(info.up_price*100)} / ${Math.round(info.down_price*100)}</span>
+                    </div>
+                    <div class="stat-group">
+                        <span class="label">⏳ Time</span>
+                        <span class="value ${info.time_remaining < 60 ? 'warning' : ''}">${info.time_remaining}s</span>
                     </div>
                 `;
                 if (!document.getElementById('strategyOverlay')) {
