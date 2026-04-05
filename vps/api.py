@@ -224,6 +224,10 @@ def bot_loop():
 
                 # 3. Decision Logic (60s-240s)
                 if 60 <= window_offset <= 240:
+                    # Diagnostic Log (Every 30s)
+                    if window_offset % 30 == 0:
+                        log_to_file(f"🧐 Thinking... Diff: {current_strategy_info['current_diff']}% | Outcome: {up_price}/{down_price}")
+                    
                     trades = safe_read_json(TRADES_PATH) or []
                     already_traded = any(t.get("window_ts") == window_ts for t in trades)
                     
@@ -234,6 +238,10 @@ def bot_loop():
                         elif diff < -0.3 and down_price < 0.55:
                             current_strategy_info["edge"] = "DOWN triggered"
                             execute_trade("DOWN", down_price, price_now, slug, window_ts, cfg)
+                elif window_offset > 240 and window_offset % 30 == 0:
+                     log_to_file("⏳ Window closing soon - entries disabled.")
+                elif window_offset < 60 and window_offset % 30 == 0:
+                     log_to_file("⏳ Just opened - waiting for price to stabilize.")
 
             time.sleep(1) # Fast strategy checks
         except Exception as e:
