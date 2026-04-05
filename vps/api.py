@@ -119,18 +119,25 @@ def bot_loop():
                 price_history.append(price)
                 if len(price_history) > 20: price_history.pop(0)
                 
-                # Simple RSI Logic
-                if len(price_history) >= 10:
-                    diffs = [price_history[i] - price_history[i-1] for i in range(1, len(price_history))]
-                    gains = sum(d for d in diffs if d > 0)
-                    losses = abs(sum(d for d in diffs if d < 0))
-                    rsi = 100 - (100 / (1 + (gains/losses))) if losses > 0 else 100
-                    
-                    if rsi < 30: # Oversold -> UP
-                        execute_trade("UP", 85.0, price, cfg)
-                    elif rsi > 70: # Overbought -> DOWN
-                        execute_trade("DOWN", 85.0, price, cfg)
-            
+                # Check trades Frequency & Cooldown
+                last_trade_time = 0
+                trades = safe_read_json(TRADES_PATH) or []
+                if trades:
+                    last_trade_time = datetime.fromisoformat(trades[-1]["timestamp"].replace("Z", "+00:00")).timestamp()
+                
+                cooldown = cfg.get("cooldown_seconds", 60)
+                if now - last_trade_time > cooldown:
+                    if len(price_history) >= 10:
+                        diffs = [price_history[i] - price_history[i-1] for i in range(1, len(price_history))]
+                        gains = sum(d for d in diffs if d > 0)
+                        losses = abs(sum(d for d in diffs if d < 0))
+                        rsi = 100 - (100 / (1 + (gains/losses))) if losses > 0 else 100
+                        
+                        if rsi < 30: # Oversold -> UP
+                            execute_trade("UP", 85.0, price, cfg)
+                        elif rsi > 70: # Overbought -> DOWN
+                            execute_trade("DOWN", 85.0, price, cfg)
+                
             time.sleep(cfg.get("price_poll_seconds", 10))
         except Exception as e:
             log_to_file(f"⚠️ Bot Loop Error: {e}")
