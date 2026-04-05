@@ -100,8 +100,19 @@ def status():
     wins = sum(1 for t in trades if t.get("outcome") == "win")
     losses = sum(1 for t in trades if t.get("outcome") == "loss")
     
+    # Load dry_run from config
+    dry_run = True
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH) as f:
+                cfg = json.load(f)
+                dry_run = cfg.get("dry_run", True)
+        except:
+            pass
+
     return jsonify({
         "running": running,
+        "dry_run": dry_run,
         "total_trades": len(trades),
         "wins": wins,
         "losses": losses,
@@ -112,7 +123,8 @@ def status():
 @app.route("/start", methods=["POST"])
 def start_bot():
     if is_bot_running(): return jsonify({"status": "already_running"})
-    subprocess.Popen(["python3", str(BOT_SCRIPT)], cwd=str(BOT_DIR))
+    py_cmd = "python" if os.name == "nt" else "python3"
+    subprocess.Popen([py_cmd, str(BOT_SCRIPT)], cwd=str(BOT_DIR))
     return jsonify({"status": "started"})
 
 @app.route("/stop", methods=["POST"])
