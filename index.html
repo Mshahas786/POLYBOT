@@ -609,6 +609,46 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
+        /* ── Strategy Overlay ──────────────────────── */
+        .strategy-overlay {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+            padding: 18px;
+            background: rgba(20, 20, 20, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--accent-dim);
+            border-radius: 16px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .strategy-overlay .stat-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+        }
+        .strategy-overlay .label {
+            font-size: 10px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .strategy-overlay .value {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .strategy-overlay .value.up { color: var(--green); text-shadow: 0 0 10px rgba(46, 213, 115, 0.3); }
+        .strategy-overlay .value.down { color: var(--red); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3); }
+        .strategy-overlay .value.warning { color: var(--yellow); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
         /* ── Loading ───────────────────────────────── */
         .loading {
             text-align: center;
@@ -1039,6 +1079,33 @@
             document.getElementById('btnStart').disabled = data.running;
             document.getElementById('btnStop').disabled = !data.running;
 
+            // Strategy Overlay (New)
+            if (data.info && data.info.market !== "N/A") {
+                const info = data.info;
+                const overlay = document.getElementById('strategyOverlay') || document.createElement('div');
+                overlay.id = 'strategyOverlay';
+                overlay.className = 'strategy-overlay';
+                overlay.innerHTML = `
+                    <div class="stat-group">
+                        <span class="label">🎯 Price to Beat</span>
+                        <span class="value">$${info.price_to_beat.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-group">
+                        <span class="label">⏳ Time Left</span>
+                        <span class="value ${info.time_remaining < 120 ? 'warning' : ''}">${info.time_remaining}s</span>
+                    </div>
+                    <div class="stat-group">
+                        <span class="label">📊 Diff %</span>
+                        <span class="value ${info.current_diff > 0.3 ? 'up' : info.current_diff < -0.3 ? 'down' : ''}">${info.current_diff}%</span>
+                    </div>
+                `;
+                if (!document.getElementById('strategyOverlay')) {
+                    document.querySelector('.dashboard-stats').prepend(overlay);
+                }
+            } else if (document.getElementById('strategyOverlay')) {
+                document.getElementById('strategyOverlay').remove();
+            }
+
             // Latest logs
             const logs = data.logs || [];
             const latestDiv = document.getElementById('latestLogs');
@@ -1058,12 +1125,16 @@
         // ── Fetch BTC Price ──────────────────────────
         async function fetchBtcPrice() {
             try {
-                const resp = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+                // Use the same source as the bot logic for consistency
+                const resp = await fetch('https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD');
                 const data = await resp.json();
-                const price = parseFloat(data.price);
+                const price = data.USD;
                 document.getElementById('btcPrice').textContent = '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
             } catch (e) {
-                document.getElementById('btcPrice').textContent = '--';
+                // Fallback to Binance
+                const br = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+                const bd = await br.json();
+                document.getElementById('btcPrice').textContent = '$' + parseFloat(bd.price).toLocaleString();
             }
         }
 

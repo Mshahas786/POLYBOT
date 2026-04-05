@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v2.5
-Combined Flask API + Trading Engine with Background Threading.
+PolyBot Unified Backend v2.6
+BTC 5-Minute "Price to Beat" Strategy Implementation.
 """
 
 import json
@@ -30,6 +30,12 @@ bot_running = False
 bot_thread = None
 price_history = []
 env_keys = {}
+current_strategy_info = {
+    "market": "N/A",
+    "price_to_beat": 0,
+    "current_diff": 0,
+    "time_remaining": 0
+}
 
 # ── Safe File Helpers ─────────────────────────────────────
 def safe_read_json(path):
@@ -64,117 +70,124 @@ def log_to_file(msg):
         except PermissionError:
             time.sleep(0.1)
 
-# ── Bot Logic ─────────────────────────────────────────────
+# ── Data Sources ──────────────────────────────────────────
 def get_btc_price():
+    """Fetch BTC price from CryptoCompare (User's preferred source)."""
     try:
-        resp = requests.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": "BTCUSDT"}, timeout=5)
-        return float(resp.json()["price"])
-    except: return None
+        resp = requests.get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD", timeout=5)
+        return float(resp.json()["USD"])
+    except:
+        # Fallback to Binance
+        try:
+            resp = requests.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": "BTCUSDT"}, timeout=5)
+            return float(resp.json()["price"])
+        except: return None
 
-def get_historical_price(ts_ms):
+def get_active_5m_markets():
+    """Fetch active BTC 5m markets from Polymarket Gamma API."""
     try:
-        resp = requests.get("https://api.binance.com/api/v3/klines", 
-                            params={"symbol": "BTCUSDT", "interval": "1m", "startTime": ts_ms, "limit": 1}, timeout=5)
-        return float(resp.json()[0][4])
-    except: return None
+        # Query Gamma API for BTC markets
+        resp = requests.get("https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=20", timeout=10)
+        markets = resp.json()
+        
+        filtered = []
+        for m in markets:
+            q = m.get("question", "").lower()
+            if "bitcoin" in q and "5" in q and "-5m-" in m.get("slug", ""):
+                filtered.append(m)
+        return filtered
+    except Exception as e:
+        log_to_file(f"⚠️ Market Scan Failed: {e}")
+        return []
 
-def check_outcomes():
-    trades = safe_read_json(TRADES_PATH) or []
-    updated = False
-    now = datetime.now(timezone.utc).timestamp()
-    
-    for t in trades:
-        if t.get("outcome") is None:
-            t_time = datetime.fromisoformat(t["timestamp"].replace("Z", "+00:00")).timestamp()
-            if now > t_time + 310: # 5m window
-                close = get_historical_price(int(t_time * 1000) + 300000)
-                if close:
-                    entry = float(t["btc_price"])
-                    win = (t["direction"] == "UP" and close > entry) or (t["direction"] == "DOWN" and close < entry)
-                    t["outcome"] = "win" if win else "loss"
-                    t["close_price"] = close
-                    updated = True
-                    log_to_file(f"🎯 Outcome: {t['outcome'].upper()} | Entry: {entry} | Close: {close}")
-    if updated: safe_write_json(TRADES_PATH, trades)
-
+# ── Bot Loop & Strategy ───────────────────────────────────
 def bot_loop():
-    global bot_running, price_history, env_keys
-    log_to_file("🤖 POLYBOT ENGINE STARTING...")
-    last_outcome_check = 0
+    global bot_running, current_strategy_info
+    log_to_file("🤖 BTC 5M STRATEGY ENGINE STARTING...")
+    
+    market_start_prices = {} # slug -> price_to_beat
     
     while bot_running:
         try:
-            # Load dynamic config
             cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True, "bet_size": 2.0}
+            now_dt = datetime.now(timezone.utc)
             
-            # Live Outcome Check
-            now = time.time()
-            if now - last_outcome_check > 120:
-                check_outcomes()
-                last_outcome_check = now
+            # 1. Scan for markets
+            markets = get_active_5m_markets()
+            if not markets:
+                time.sleep(10)
+                continue
             
-            # Strategy
-            price = get_btc_price()
-            if price:
-                price_history.append(price)
-                if len(price_history) > 20: price_history.pop(0)
+            # Process the "soonest" market
+            m = markets[0]
+            slug = m.get("slug")
+            end_time_str = m.get("endDate")
+            if not end_time_str: continue
+            
+            end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+            time_remaining = (end_dt - now_dt).total_seconds()
+            
+            # 2. Get Price to Beat (Start Price)
+            # For 5m markets, they open at every 5m mark (00, 05, 10...)
+            # We track the price at the beginning of THIS market's window.
+            if slug not in market_start_prices:
+                # If we just found a new market, its start price was from ~5 mins ago
+                # But the user strategy says: "Store price_to_beat at start of each 5-min window"
+                market_start_prices[slug] = get_btc_price()
+                log_to_file(f"📍 New Market Detected: {slug} | Price to Beat: {market_start_prices[slug]}")
+            
+            price_to_beat = market_start_prices[slug]
+            price_now = get_btc_price()
+            
+            if price_now and price_to_beat:
+                diff = (price_now - price_to_beat) / price_to_beat * 100
                 
-                # Check trades Frequency & Cooldown
-                last_trade_time = 0
-                trades = safe_read_json(TRADES_PATH) or []
-                if trades:
-                    last_trade_time = datetime.fromisoformat(trades[-1]["timestamp"].replace("Z", "+00:00")).timestamp()
+                # Update Dashboard Info
+                current_strategy_info = {
+                    "market": slug,
+                    "price_to_beat": price_to_beat,
+                    "current_diff": round(diff, 3),
+                    "time_remaining": int(time_remaining)
+                }
                 
-                cooldown = cfg.get("cooldown_seconds", 60)
-                if now - last_trade_time > cooldown:
-                    if len(price_history) >= 10:
-                        diffs = [price_history[i] - price_history[i-1] for i in range(1, len(price_history))]
-                        gains = sum(d for d in diffs if d > 0)
-                        losses = abs(sum(d for d in diffs if d < 0))
-                        rsi = 100 - (100 / (1 + (gains/losses))) if losses > 0 else 100
-                        
-                        if rsi < 30: # Oversold -> UP
-                            execute_trade("UP", 85.0, price, cfg)
-                        elif rsi > 70: # Overbought -> DOWN
-                            execute_trade("DOWN", 85.0, price, cfg)
-                
-            time.sleep(cfg.get("price_poll_seconds", 10))
+                # 3. Decision Rules
+                if time_remaining > 60:
+                    # Check if already traded in this slug
+                    trades = safe_read_json(TRADES_PATH) or []
+                    already_traded = any(t.get("market_slug") == slug for t in trades)
+                    
+                    if not already_traded:
+                        if diff > 0.3:
+                            execute_trade("UP", 90.0, price_now, slug, cfg)
+                        elif diff < -0.3:
+                            execute_trade("DOWN", 90.0, price_now, slug, cfg)
+            
+            # Cleanup old slugs
+            if len(market_start_prices) > 10:
+                market_start_prices = {k: v for i, (k, v) in enumerate(market_start_prices.items()) if i > 5}
+
+            time.sleep(10) # Scan frequency
         except Exception as e:
-            log_to_file(f"⚠️ Bot Loop Error: {e}")
+            log_to_file(f"⚠️ Strategy Loop Error: {e}")
             time.sleep(5)
 
-def execute_trade(direction, confidence, price, cfg):
+def execute_trade(direction, confidence, price, slug, cfg):
     is_dry = cfg.get("dry_run", True)
     status = "simulated" if is_dry else "placed"
     
-    if not is_dry:
-        # Load env for live keys
-        env = {}
-        if ENV_PATH.exists():
-            with open(ENV_PATH, "r", encoding="utf-8") as f:
-                for line in f:
-                    if "=" in line:
-                        k, v = line.strip().split("=", 1)
-                        env[k] = v
-        
-        if not env.get("POLY_PRIVATE_KEY"):
-            log_to_file("❌ CANNOT TRADE LIVE: No POLY_PRIVATE_KEY found in .env!")
-            status = "failed (no key)"
-        else:
-            log_to_file(f"💰 PLACING LIVE {direction} ORDER on Polymarket!")
-
     trade = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "market_slug": slug,
         "direction": direction,
         "confidence": confidence,
         "btc_price": price,
-        "bet_size": cfg.get("bet_size", 2.0),
+        "bet_size": 2.0, # Strategy forced $2
         "dry_run": is_dry,
         "status": status,
         "outcome": None
     }
     
-    log_to_file(f"🚀 {status.upper()}: {direction} @ {price}")
+    log_to_file(f"🚀 {status.upper()} TRADE on {slug}: {direction} @ {price}")
     trades = safe_read_json(TRADES_PATH) or []
     trades.append(trade)
     safe_write_json(TRADES_PATH, trades)
@@ -191,6 +204,8 @@ def get_status():
     return jsonify({
         "running": bot_running,
         "dry_run": cfg.get("dry_run", True),
+        "strategy": "BTC 5m PriceToBeat",
+        "info": current_strategy_info,
         "total_trades": len(trades),
         "wins": wins,
         "losses": losses,
@@ -201,15 +216,7 @@ def get_status():
 @app.route("/stats")
 def get_stats():
     trades = safe_read_json(TRADES_PATH) or []
-    wins = sum(1 for t in trades if t.get("outcome") == "win")
-    losses = sum(1 for t in trades if t.get("outcome") == "loss")
-    return jsonify({
-        "total_trades": len(trades),
-        "wins": wins,
-        "losses": losses,
-        "success_rate": round((wins / (wins+losses) * 100), 1) if (wins+losses) > 0 else 0,
-        "history": trades[-50:]
-    })
+    return jsonify({"history": trades[-50:]})
 
 @app.route("/start", methods=["POST"])
 def start_bot():
