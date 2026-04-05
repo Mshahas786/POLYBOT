@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v2.7
-Advanced "Edge" Strategy with Binance WebSockets & Odds Analysis.
+PolyBot Unified Backend v2.8
+Fixed BTC 5m Strategy: Outcome Prices & Baseline Sync.
 """
 
 import json
@@ -42,7 +42,8 @@ current_strategy_info = {
     "time_remaining": 0,
     "up_price": 0,
     "down_price": 0,
-    "edge": "None"
+    "edge": "None",
+    "status": "Inactive"
 }
 
 # ── Binance WebSocket Client ───────────────────────────────
@@ -120,9 +121,12 @@ def get_polymarket_market(slug):
     try:
         resp = requests.get(f"https://gamma-api.polymarket.com/markets?slug={slug}", timeout=5)
         data = resp.json()
-        if data and len(data) > 0:
+        if data and isinstance(data, list) and len(data) > 0:
             return data[0]
-    except: return None
+        return None
+    except Exception as e:
+        log_to_file(f"⚠️ Gamma API Error: {e}")
+        return None
 
 def get_current_5min_ts():
     return (int(time.time()) // 300) * 300
@@ -130,7 +134,7 @@ def get_current_5min_ts():
 # ── Bot Loop & Strategy ───────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info
-    log_to_file("🚀 ADVANCED EDGE ENGINE STARTING...")
+    log_to_file("🚀 BTC 5M EDGE ENGINE STARTING...")
     
     market_start_prices = {} # window_ts -> price_to_beat
     
@@ -145,27 +149,32 @@ def bot_loop():
             # 1. Fetch Market Details
             market = get_polymarket_market(slug)
             if not market:
+                current_strategy_info["status"] = f"SCANNING FOR {slug}..."
                 time.sleep(5)
                 continue
             
-            # Extract Tokens (0: UP, 1: DOWN)
-            tokens = market.get("tokens", [])
-            if len(tokens) < 2: continue
+            # Extract Odds (outcomePrices instead of tokens)
+            outcomes = market.get("outcomePrices", [])
+            if len(outcomes) < 2: 
+                time.sleep(5)
+                continue
             
-            up_price = float(tokens[0].get("price", 0.5))
-            down_price = float(tokens[1].get("price", 0.5))
+            up_price = float(outcomes[0])
+            down_price = float(outcomes[1])
             
             # 2. Get Price to Beat (Start Price)
-            # Use CryptoCompare for the "Resolution Start" baseline if possible, or Binance at window start.
+            # Use historical minute endpoint for the exact window start (Chainlink sync)
             if window_ts not in market_start_prices:
                 try:
-                    # Fetching the price at the interval start
-                    resp = requests.get(f"https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts={window_ts}", timeout=5)
-                    market_start_prices[window_ts] = float(resp.json()["BTC"]["USD"])
-                except:
+                    # v2/histominute?limit=1&toTs={ts}
+                    resp = requests.get(f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={window_ts}", timeout=5)
+                    market_start_prices[window_ts] = float(resp.json()["Data"]["Data"][-1]["close"])
+                    log_to_file(f"📍 Baseline Sync for {window_ts} | Price To Beat: ${market_start_prices[window_ts]}")
+                except Exception as e:
+                    # Fallback to current live price if historical API fails
                     with price_lock:
                         market_start_prices[window_ts] = last_btc_price
-                log_to_file(f"📍 New Window {window_ts} | Price to Beat: {market_start_prices[window_ts]}")
+                    log_to_file(f"⚠️ Hist Price Sync failed: {e}. Using current: {market_start_prices[window_ts]}!")
 
             price_to_beat = market_start_prices[window_ts]
             with price_lock:
@@ -182,32 +191,24 @@ def bot_loop():
                     "time_remaining": 300 - window_offset,
                     "up_price": up_price,
                     "down_price": down_price,
-                    "edge": "None"
+                    "edge": "None",
+                    "status": "Targeting Market"
                 }
 
-                # 3. Timing Rules (60-240 Range)
+                # 3. Decision Logic (60s-240s)
                 if 60 <= window_offset <= 240:
-                    # Check if already traded in this window
                     trades = safe_read_json(TRADES_PATH) or []
                     already_traded = any(t.get("window_ts") == window_ts for t in trades)
                     
                     if not already_traded:
-                        # EDGE LOGIC
                         if diff > 0.3 and up_price < 0.55:
                             current_strategy_info["edge"] = "UP triggered"
                             execute_trade("UP", up_price, price_now, slug, window_ts, cfg)
                         elif diff < -0.3 and down_price < 0.55:
                             current_strategy_info["edge"] = "DOWN triggered"
                             execute_trade("DOWN", down_price, price_now, slug, window_ts, cfg)
-            
-            # 4. Success Tracking (Log win/loss of previous window)
-            prev_window = window_ts - 300
-            if prev_window in market_start_prices:
-                # We can check outcome here by calling CryptoCompare for window_ts price
-                # Or just let check_outcomes handle it.
-                pass
 
-            time.sleep(2) # High speed strategy checks
+            time.sleep(1) # Fast strategy checks
         except Exception as e:
             log_to_file(f"⚠️ Edge Strategy Error: {e}")
             time.sleep(2)
@@ -243,14 +244,13 @@ def get_status():
     losses = sum(1 for t in trades if t.get("outcome") == "loss")
     cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True}
     
-    with price_lock:
-        live_price = last_btc_price
+    with price_lock: live_price = last_btc_price
 
     return jsonify({
         "running": bot_running,
         "dry_run": cfg.get("dry_run", True),
         "btc_price": live_price,
-        "strategy": "Advanced Edge (WS)",
+        "strategy": "BTC 5m Edge",
         "info": current_strategy_info,
         "total_trades": len(trades),
         "wins": wins,
@@ -271,11 +271,6 @@ def get_stats():
         "success_rate": round((wins / (wins+losses) * 100), 1) if (wins+losses) > 0 else 0,
         "history": trades[-50:]
     })
-
-@app.route("/trades")
-def get_trades():
-    trades = safe_read_json(TRADES_PATH) or []
-    return jsonify({"history": trades})
 
 @app.route("/start", methods=["POST"])
 def start_bot():

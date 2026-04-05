@@ -1085,29 +1085,39 @@
             document.getElementById('btnStop').disabled = !data.running;
 
             // Strategy Overlay (New)
-            if (data.info && data.info.market !== "N/A") {
+            if (data.info && data.info.slug !== "N/A") {
                 const info = data.info;
                 const overlay = document.getElementById('strategyOverlay') || document.createElement('div');
                 overlay.id = 'strategyOverlay';
                 overlay.className = 'strategy-overlay';
-                overlay.innerHTML = `
-                    <div class="stat-group">
-                        <span class="label">🎯 Target</span>
-                        <span class="value">$${info.price_to_beat.toLocaleString()}</span>
-                    </div>
-                    <div class="stat-group">
-                        <span class="label">📊 Diff</span>
-                        <span class="value ${info.current_diff > 0.3 ? 'up' : info.current_diff < -0.3 ? 'down' : ''}">${info.current_diff}%</span>
-                    </div>
-                    <div class="stat-group">
-                        <span class="label">🎲 Odds (U/D)</span>
-                        <span class="value">${Math.round(info.up_price*100)} / ${Math.round(info.down_price*100)}</span>
-                    </div>
-                    <div class="stat-group">
-                        <span class="label">⏳ Time</span>
-                        <span class="value ${info.time_remaining < 60 ? 'warning' : ''}">${info.time_remaining}s</span>
-                    </div>
-                `;
+                
+                if (info.status && info.status.includes("SCANNING")) {
+                    overlay.innerHTML = `
+                        <div style="flex:1; text-align:center; color:var(--muted); font-size:12px; font-family:'JetBrains Mono',monospace;">
+                            🔍 ${info.status}
+                        </div>
+                    `;
+                } else {
+                    overlay.innerHTML = `
+                        <div class="stat-group">
+                            <span class="label">🎯 Target</span>
+                            <span class="value">$${info.price_to_beat.toLocaleString()}</span>
+                        </div>
+                        <div class="stat-group">
+                            <span class="label">📊 Diff</span>
+                            <span class="value ${info.current_diff > 0.3 ? 'up' : info.current_diff < -0.3 ? 'down' : ''}">${info.current_diff}%</span>
+                        </div>
+                        <div class="stat-group">
+                            <span class="label">🎲 Odds (U/D)</span>
+                            <span class="value">${Math.round(info.up_price*100)} / ${Math.round(info.down_price*100)}</span>
+                        </div>
+                        <div class="stat-group">
+                            <span class="label">⏳ Time</span>
+                            <span class="value ${info.time_remaining < 60 ? 'warning' : ''}">${info.time_remaining}s</span>
+                        </div>
+                    `;
+                }
+                
                 if (!document.getElementById('strategyOverlay')) {
                     const container = document.querySelector('.stats-grid');
                     if (container) container.parentNode.insertBefore(overlay, container);
