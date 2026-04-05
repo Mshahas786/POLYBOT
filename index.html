@@ -1088,7 +1088,6 @@
                     const fallback = await fetch(VPS_URL + '/trades?limit=50');
                     data = await fallback.json();
                 }
-                const data = await resp.json();
                 const trades = data.history || data.trades || [];
 
                 // Recent trades (dashboard)
