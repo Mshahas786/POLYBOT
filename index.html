@@ -72,6 +72,11 @@
         .refresh-btn { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--accent); padding: 10px 20px; border-radius: 8px; z-index: 1000; display: none; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
         .danger-btn { background: var(--red-dim); color: var(--red); border-color: rgba(255, 71, 87, 0.2); }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+        .form-control { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        .form-control:focus { outline: none; border-color: var(--accent); }
+        .toggle-container { margin-bottom: 12px; padding: 12px; border: 1px solid var(--red-dim); background: rgba(255, 71, 87, 0.05); border-radius: 8px; }
     </style>
 </head>
 
@@ -151,18 +156,49 @@
     <div class="page" id="page-settings">
         <div class="card">
             <div class="card-title">VPS CONNECTION</div>
-            <div style="margin-bottom:12px">
-                <label class="stat-label">VPS URL</label>
-                <input style="width:100%; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px" id="vpsUrl" value="http://152.67.120.35:3000">
+            <div class="form-group">
+                <label>VPS API URL</label>
+                <input class="form-control" id="vpsUrl" value="http://152.67.120.35:3000">
             </div>
             <button class="refresh-btn" onclick="saveSettings()">Save Connection</button>
         </div>
-        <div class="card">
-            <div class="card-title">BOT CONFIG</div>
-            <div style="font-size:11px; color:var(--muted)">Mode: <span id="confMode">--</span></div>
-            <div style="font-size:11px; color:var(--muted)">Bet Size: <span id="confBet">--</span></div>
+        
+        <div class="card" id="configCard">
+            <div class="card-title">STRATEGY CONFIGURATION</div>
+            
+            <div class="toggle-container">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%">
+                    <div>
+                        <div style="font-size:12px; font-weight:600; color:var(--red); font-family:'JetBrains Mono'">LIVE TRADING</div>
+                        <div style="font-size:10px; color:var(--muted); margin-top:4px;">Turn off DRY RUN to place real orders</div>
+                    </div>
+                    <label style="position: relative; display: inline-block; width: 40px; height: 22px;">
+                        <input type="checkbox" id="confLiveMode" style="opacity: 0; width: 0; height: 0;" onchange="document.getElementById('slider').style.background = this.checked ? 'var(--red)' : 'var(--muted)'; document.getElementById('slider-handle').style.transform = this.checked ? 'translateX(18px)' : 'translateX(0)';">
+                        <span id="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--muted); transition: .4s; border-radius: 22px;">
+                            <span id="slider-handle" style="position: absolute; content: ''; height: 14px; width: 14px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;"></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Bet Size (USDC) <span id="valBet">2.0</span></label>
+                <input type="range" class="form-control" id="confBet" min="1" max="100" step="1" oninput="document.getElementById('valBet').innerText = this.value">
+            </div>
+            <div class="form-group">
+                <label>Momentum Threshold <span id="valMom">0.0003</span></label>
+                <input type="range" class="form-control" id="confMom" min="0.0001" max="0.0020" step="0.0001" oninput="document.getElementById('valMom').innerText = this.value">
+            </div>
+            <div class="form-group">
+                <label>Max Trades / Hour <span id="valMax">5</span></label>
+                <input type="range" class="form-control" id="confMax" min="1" max="20" step="1" oninput="document.getElementById('valMax').innerText = this.value">
+            </div>
+            <div class="form-group">
+                <label>Trade Cooldown (sec) <span id="valCool">60</span></label>
+                <input type="range" class="form-control" id="confCool" min="30" max="600" step="10" oninput="document.getElementById('valCool').innerText = this.value">
+            </div>
+            <button class="refresh-btn" style="border-color:var(--accent-glow)" onclick="saveBotConfig()">UPDATE STRATEGY</button>
         </div>
-        <button class="refresh-btn danger-btn" onclick="clearData()">Wipe Local Storage</button>
     </div>
 
     <script>
@@ -244,14 +280,69 @@
             } catch (e) { alert('Error: ' + e.message); }
         }
 
+        async function fetchConfig() {
+            try {
+                const resp = await fetch(`${VPS_URL}/config`);
+                const conf = await resp.json();
+                
+                const liveToggle = document.getElementById('confLiveMode');
+                liveToggle.checked = !conf.dry_run;
+                document.getElementById('slider').style.background = liveToggle.checked ? 'var(--red)' : 'var(--muted)';
+                document.getElementById('slider-handle').style.transform = liveToggle.checked ? 'translateX(18px)' : 'translateX(0)';
+
+                document.getElementById('confBet').value = conf.bet_size;
+                document.getElementById('valBet').innerText = conf.bet_size;
+
+                document.getElementById('confMom').value = conf.momentum_threshold;
+                document.getElementById('valMom').innerText = conf.momentum_threshold;
+
+                document.getElementById('confMax').value = conf.max_trades_per_hour;
+                document.getElementById('valMax').innerText = conf.max_trades_per_hour;
+
+                document.getElementById('confCool').value = conf.cooldown_seconds;
+                document.getElementById('valCool').innerText = conf.cooldown_seconds;
+
+            } catch(e) { console.log("Config load error"); }
+        }
+
+        async function saveBotConfig() {
+            try {
+                const conf = {
+                    dry_run: !document.getElementById('confLiveMode').checked,
+                    bet_size: parseFloat(document.getElementById('confBet').value),
+                    momentum_threshold: parseFloat(document.getElementById('confMom').value),
+                    max_trades_per_hour: parseInt(document.getElementById('confMax').value),
+                    cooldown_seconds: parseInt(document.getElementById('confCool').value)
+                };
+                
+                await fetch(`${VPS_URL}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(conf)
+                });
+                showToast('Strategy Updated!');
+                fetchData();
+            } catch(e) { alert('Error saving: ' + e.message); }
+        }
+
         function saveSettings() {
             VPS_URL = document.getElementById('vpsUrl').value;
             localStorage.setItem('vpsUrl', VPS_URL);
             fetchData();
+            fetchConfig();
+            showToast('Connection Saved!');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
         }
 
         setInterval(fetchData, 10000);
         fetchData();
+        fetchConfig();
     </script>
 </body>
 </html>
