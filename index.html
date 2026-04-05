@@ -1101,7 +1101,7 @@
                     overlay.innerHTML = `
                         <div class="stat-group">
                             <span class="label">🎯 Target</span>
-                            <span class="value">$${info.price_to_beat.toLocaleString()}</span>
+                            <span class="value">$${info.price_to_beat.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div class="stat-group">
                             <span class="label">📊 Diff</span>
