@@ -9,9 +9,12 @@ Write-Host "Copying python files locally..."
 Copy-Item "vps\api.py" "$BotDir\api.py" -Force
 Copy-Item "vps\bot.py" "$BotDir\bot.py" -Force
 
-# Initialize default config if missing
+# Initialize default config and env if missing
 if (-Not (Test-Path "$BotDir\config.json")) {
     '{"dry_run": true, "bet_size": 2.0}' | Out-File -FilePath "$BotDir\config.json" -Encoding utf8
+}
+if (-Not (Test-Path "$BotDir\.env")) {
+    '# POLYMARKET KEYS`nPOLY_PRIVATE_KEY=your_private_key_here`nPOLY_WALLET_ADDRESS=your_wallet_address_here' | Out-File -FilePath "$BotDir\.env" -Encoding utf8
 }
 
 Write-Host "Installing Python Dependencies..."
@@ -42,11 +45,13 @@ if ($port3000) {
 
 $env:PYTHONUTF8 = 1
 
-Write-Host "Starting API & BOT locally in background..."
-Start-Process -FilePath "python" -ArgumentList "api.py" -WindowStyle Hidden -RedirectStandardOutput "api.log" -RedirectStandardError "api.err"
-Start-Process -FilePath "python" -ArgumentList "bot.py" -WindowStyle Hidden -RedirectStandardOutput "bot.log" -RedirectStandardError "bot.err"
+Write-Host "Starting API & BOT locally (VISIBLE WINDOWS)..."
+# Start API in a new visible window
+Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd $BotDir; `$env:PYTHONUTF8=1; python api.py" -WindowStyle Normal
+# Start Bot in a new visible window
+Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd $BotDir; `$env:PYTHONUTF8=1; python bot.py" -WindowStyle Normal
 
-Write-Host "Starting Cloudflare Quick Tunnel locally..."
+Write-Host "Starting Cloudflare Quick Tunnel..."
 if (Test-Path "cloudflared.log") { Remove-Item "cloudflared.log" -Force }
 Start-Process -FilePath $CloudflaredExe -ArgumentList "tunnel --url http://127.0.0.1:3000" -WindowStyle Hidden -RedirectStandardError "cloudflared.log" -RedirectStandardOutput "cloudflared.out"
 

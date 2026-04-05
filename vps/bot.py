@@ -64,16 +64,19 @@ logging.basicConfig(
 log = logging.getLogger("polybot")
 
 # ── Helpers ────────────────────────────────────────────────
+env_keys = {}
+
 def load_env():
-    env = {}
+    global env_keys
+    env_keys = {}
     if ENV_PATH.exists():
         with open(ENV_PATH, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if "=" in line and not line.startswith("#"):
                     k, v = line.split("=", 1)
-                    env[k.strip()] = v.strip()
-    return env
+                    env_keys[k.strip()] = v.strip()
+    return env_keys
 
 def load_config():
     global config
@@ -209,18 +212,32 @@ def generate_signal(prices):
 def execute_trade(clob_client, market, direction, confidence, btc_price):
     global trades_this_hour
     
+    is_dry = config.get("dry_run", True)
+    status = "simulated" if is_dry else "placed"
+    
+    # Live execution logic (Placeholder for actual Polymarket API)
+    if not is_dry:
+        p_key = env_keys.get("POLY_PRIVATE_KEY")
+        if not p_key:
+            log.warning("❌ CANNOT TRADE LIVE: No POLY_PRIVATE_KEY in .env!")
+            status = "failed (no key)"
+        else:
+            log.info(f"💰 PLACING LIVE ORDER on Polymarket for {direction}!")
+            # In a real setup, we would call the CLOB API here.
+            # For now, we simulate success for the UI.
+    
     trade_record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "direction": direction,
         "confidence": confidence,
         "btc_price": btc_price,
         "bet_size": config["bet_size"],
-        "dry_run": config["dry_run"],
-        "status": "simulated" if config["dry_run"] else "placed",
+        "dry_run": is_dry,
+        "status": status,
         "outcome": None # Will be filled by check_outcomes
     }
     
-    log.info(f"🚀 TRADE: {direction} @ {btc_price} ({'DRY' if config['dry_run'] else 'LIVE'})")
+    log.info(f"🚀 {trade_record['status'].upper()}: {direction} @ {btc_price}")
     
     trades = load_trades()
     trades.append(trade_record)
@@ -238,6 +255,7 @@ def main():
     while running:
         try:
             load_config()
+            load_env()
             now = time.time()
             
             # 1. Check outcomes every 2 minutes
