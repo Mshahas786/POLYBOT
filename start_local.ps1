@@ -5,16 +5,29 @@ if (-Not (Test-Path $BotDir)) {
     New-Item -ItemType Directory -Path $BotDir | Out-Null
 }
 
-Write-Host "Copying python files locally..."
+Write-Host "Copying configuration files locally..."
 Copy-Item "vps\api.py" "$BotDir\api.py" -Force
 Copy-Item "vps\bot.py" "$BotDir\bot.py" -Force
-
-# Initialize default config and env if missing
-if (-Not (Test-Path "$BotDir\config.json")) {
-    '{"dry_run": true, "bet_size": 2.0}' | Out-File -FilePath "$BotDir\config.json" -Encoding utf8
+if (Test-Path ".env") {
+    Copy-Item ".env" "$BotDir\.env" -Force
 }
-if (-Not (Test-Path "$BotDir\.env")) {
-    '# POLYMARKET KEYS`nPOLY_PRIVATE_KEY=your_private_key_here`nPOLY_WALLET_ADDRESS=your_wallet_address_here' | Out-File -FilePath "$BotDir\.env" -Encoding utf8
+if (Test-Path "config.json") {
+    Copy-Item "config.json" "$BotDir\config.json" -Force
+}
+
+# Initialize default config and env if missing in workspace
+if (-Not (Test-Path "config.json")) {
+    '{"dry_run": true, "bet_size": 2.0}' | Out-File -FilePath "config.json" -Encoding utf8
+}
+if (-Not (Test-Path ".env")) {
+    $envContent = "# POLYMARKET WALLET`n" +
+                  "POLY_PRIVATE_KEY=your_private_key_here`n" +
+                  "POLY_WALLET_ADDRESS=your_wallet_address_here`n" +
+                  "`n# POLYMARKET API CREDENTIALS`n" +
+                  "POLY_API_KEY=your_api_key_here`n" +
+                  "POLY_API_SECRET=your_api_secret_here`n" +
+                  "POLY_API_PASSPHRASE=your_api_passphrase_here"
+    $envContent | Out-File -FilePath ".env" -Encoding utf8
 }
 
 Write-Host "Installing Python Dependencies..."

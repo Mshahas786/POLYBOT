@@ -778,20 +778,20 @@
         <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value green" id="statStatus">--</div>
-                <div class="stat-label">Status</div>
+                <div class="stat-value green" id="statBalance">--</div>
+                <div class="stat-label">BALANCE (USDC)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statPnl">--</div>
+                <div class="stat-label">7D P&L</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value green" id="statSuccess">--</div>
-                <div class="stat-label">Win Rate %</div>
+                <div class="stat-label">WIN RATE %</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value green" id="statUp">--</div>
-                <div class="stat-label">WINS</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value red" id="statDown">--</div>
-                <div class="stat-label">LOSSES</div>
+                <div class="stat-value" id="statStatus">--</div>
+                <div class="stat-label">STATUS</div>
             </div>
         </div>
 
@@ -1079,6 +1079,19 @@
             
             document.getElementById('statUp').textContent = data.wins || 0;
             document.getElementById('statDown').textContent = data.losses || 0;
+
+            // Account Stats (Balance & P&L)
+            if (data.account) {
+                const bal = document.getElementById('statBalance');
+                const pnl = document.getElementById('statPnl');
+                
+                if (bal) bal.textContent = '$' + (data.account.balance || '0.00').toLocaleString();
+                if (pnl) {
+                    const val = data.account.pnl || 0;
+                    pnl.textContent = (val >= 0 ? '+' : '') + '$' + val.toLocaleString();
+                    pnl.className = 'stat-value ' + (val > 0 ? 'green' : (val < 0 ? 'red' : ''));
+                }
+            }
 
             // Button states
             document.getElementById('btnStart').disabled = data.running;

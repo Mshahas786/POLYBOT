@@ -10,13 +10,15 @@ import time
 import threading
 import requests
 import websocket
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderType, Side
+from py_clob_client.clob_types import MarketOrderArgs
+# from py_clob_client.clob_types import OrderType, Side
+
 
 app = Flask(__name__)
 CORS(app)
@@ -25,6 +27,7 @@ CORS(app)
 BOT_DIR = Path(os.path.expanduser("~/polybot"))
 CONFIG_PATH = BOT_DIR / "config.json"
 TRADES_PATH = BOT_DIR / "trades.json"
+ENV_PATH = BOT_DIR / ".env"
 LOG_PATH = BOT_DIR / "bot.log"
 
 # ── Global State ───────────────────────────────────────────
@@ -36,6 +39,7 @@ bot_thread = None
 last_btc_price = 0
 price_lock = threading.Lock()
 price_buffer = []  # Rolling buffer of (timestamp, price) for signals
+account_stats = {"balance": 0.0, "pnl": 0.0, "last_updated": 0}
 
 current_strategy_info = {
     "slug": "N/A", "price_to_beat": 0, "current_diff": 0,
@@ -146,6 +150,36 @@ def calc_rsi(prices, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
+def fetch_account_stats(address):
+    global account_stats
+    if not address: return
+    try:
+        # 1. Fetch Balance from Gamma API (USDC on Polygon)
+        balance_url = f"https://gamma-api.polymarket.com/balances?address={address}"
+        resp = requests.get(balance_url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            usdc_balance = 0.0
+            for item in data:
+                # The Gamma API returns a list of balances
+                if item.get("asset") == "USDC" or "USDC" in str(item.get("asset")):
+                    usdc_balance = float(item.get("balance", 0))
+                    break
+            account_stats["balance"] = round(usdc_balance, 2)
+
+        # 2. Fetch P&L from Data API
+        pnl_url = f"https://data-api.polymarket.com/pnl?address={address}&period=all"
+        resp = requests.get(pnl_url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                total_pnl = float(data[-1].get("pnl", 0))
+                account_stats["pnl"] = round(total_pnl, 2)
+        
+        account_stats["last_updated"] = time.time()
+    except Exception as e:
+        print(f"Stats Fetch Error: {e}")
+
 def analyze_signals(price_to_beat):
     with price_lock:
         buf = list(price_buffer)
@@ -202,6 +236,10 @@ def analyze_signals(price_to_beat):
         "trend": trend, "rsi": round(rsi, 1), "ema": ema_signal, 
         "vwap": vwap_signal, "votes": f"{votes_up}U/{votes_down}D", "confidence": round(confidence, 0)
     }
+    
+    # Verbose logging for every signal check (if confidence is meaningful)
+    if confidence >= 50:
+        log_to_file(f"🔍 ANALYSIS: {trend} Trend | RSI: {round(rsi,1)} | EMA: {ema_signal} | VWAP: {vwap_signal} | Votes: {votes_up}U/{votes_down}D")
     
     return direction, confidence, signals
 
@@ -295,10 +333,25 @@ def bot_loop():
                     load_dotenv(ENV_PATH)
                     pk = os.getenv("POLY_PRIVATE_KEY")
                     addr = os.getenv("POLY_WALLET_ADDRESS")
+                    
+                    # Refresh Balance & P&L every 10 minutes (or if never updated)
+                    if addr and (time.time() - account_stats["last_updated"] > 600):
+                        threading.Thread(target=fetch_account_stats, args=(addr,), daemon=True).start()
+
                     if pk and addr:
-                        # Derive API Credentials
-                        temp_client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137)
-                        creds = temp_client.create_or_derive_api_creds()
+                        # Use existing credentials if provided, otherwise derive them
+                        api_key = os.getenv("POLY_API_KEY")
+                        api_secret = os.getenv("POLY_API_SECRET")
+                        api_passphrase = os.getenv("POLY_API_PASSPHRASE")
+
+                        if api_key and api_secret and api_passphrase:
+                            from py_clob_client.clob_types import ApiCreds
+                            creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_passphrase)
+                        else:
+                            # Derive API Credentials
+                            temp_client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137)
+                            creds = temp_client.create_or_derive_api_creds()
+                        
                         client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=0, funder=addr)
                 except Exception as e:
                     log_to_file(f"⚠️ Live Client Init Error: {e}")
@@ -307,6 +360,10 @@ def bot_loop():
             direction, confidence, signals = analyze_signals(price_to_beat)
             
             with price_lock: price_now = last_btc_price
+            
+            # Heartbeat log only once at the start of every minute
+            if int(now) % 60 == 0:
+                log_to_file(f"🤖 BTC: ${price_now} | Target: ${price_to_beat} | Conf: {confidence}%")
             diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
             
             current_strategy_info = {
@@ -315,25 +372,44 @@ def bot_loop():
                 "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
             }
             
-            # 5. Decision Window (90s-210s) - Tightened for stability
-            if 90 <= window_offset <= 210:
-                if window_offset % 30 == 0:
-                    log_to_file(f"🧐 Thinking: {signals.get('votes','-')} | Conf: {confidence}% | Diff: {round(diff,3)}%")
-                
+            # 5. Decision Window (30s-285s) - Active for almost the full 5 minutes
+            if 30 <= window_offset <= 285:
                 trades = safe_read_json(TRADES_PATH) or []
+                
+                # Filter trades in the last hour for limit
+                one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
+                
+                max_hour = cfg.get("max_trades_per_hour", 12)
                 already_traded = any(t.get("window_ts") == window_ts for t in trades)
                 
-                if not already_traded and direction and confidence >= 75: # 75% Confidence
-                    # Extract Token IDs for Live Trading
-                    tokens = market.get("tokens", [])
-                    up_token_id = tokens[0].get("tokenId") if len(tokens) > 0 else None
-                    down_token_id = tokens[1].get("tokenId") if len(tokens) > 1 else None
-                    
-                    target_token_id = up_token_id if direction == "UP" else down_token_id
-                    target_price = up_price if direction == "UP" else down_price
+                # Extract Token IDs
+                tokens = market.get("tokens", [])
+                clob_ids = market.get("clobTokenIds", "[]") # Some markets use this as a string
+                if isinstance(clob_ids, str):
+                    try: clob_ids = json.loads(clob_ids)
+                    except: clob_ids = []
+                
+                up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
+                down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
+                
+                target_token_id = up_token_id if direction == "UP" else down_token_id
+                target_price = up_price if direction == "UP" else down_price
 
-                    if target_token_id and target_price < 0.58:
+                # Diagnostic log removed for cleaner output
+                
+                min_conf = cfg.get("min_confidence", 60)
+                if direction and confidence >= min_conf: 
+                    if already_traded:
+                        pass
+                    elif len(recent_trades) >= max_hour:
+                        pass
+                    elif not client and not cfg.get("dry_run", True):
+                        pass
+                    elif target_token_id:
                         execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client)
+                    else:
+                        pass
             
             check_outcomes(market_baselines)
             
@@ -371,24 +447,30 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
 
     if not is_dry and client:
         try:
-            bet_size = cfg.get("bet_size", 2.0)
-            # Create and post order
-            resp = client.create_and_post_order(
-                order_args={
-                    "tokenID": token_id,
-                    "price": token_price,
-                    "size": round(bet_size / token_price, 2),
-                    "side": Side.BUY,
-                },
-                order_type=OrderType.GTC
+            bet_size = float(cfg.get("bet_size", 2.0))
+            
+            # Using Native Market Order (No limit price required)
+            log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
+            
+            # 1. Create the Market Order Args
+            # We spend 'bet_size' USDC. The SDK handles the rest.
+            order_args = MarketOrderArgs(
+                token_id=token_id,
+                amount=bet_size,
+                side="BUY"
             )
-            if resp and hasattr(resp, "orderID"):
+            
+            # 2. Create and Post in one go if supported, or use the two-step process
+            # For market orders, create_market_order is the standard helper
+            resp = client.create_market_order(order_args)
+            
+            if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
+                order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
                 status = "placed"
-                order_id = resp.orderID
-                log_to_file(f"✅ LIVE ORDER PLACED: {direction} | OrderID: {order_id}")
+                log_to_file(f"✅ LIVE MARKET ORDER SUCCESS: {direction} | OrderID: {order_id}")
             else:
                 status = "failed"
-                log_to_file(f"❌ LIVE ORDER FAILED: {resp}")
+                log_to_file(f"❌ LIVE MARKET ORDER FAILED: {resp}")
         except Exception as e:
             status = "error"
             log_to_file(f"⚠️ Trade Execution Error: {e}")
@@ -422,7 +504,8 @@ def get_status():
         "btc_price": live_price, "strategy": "Multi-Signal v3.1",
         "info": current_strategy_info, "total_trades": len(trades), "wins": wins, "losses": losses,
         "success_rate": round((wins/(wins+losses)*100),1) if (wins+losses) > 0 else 0,
-        "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0]
+        "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0],
+        "account": account_stats
     })
 
 @app.route("/stats")
@@ -461,6 +544,24 @@ def get_logs():
             lines = f.readlines()
             return jsonify({"logs": [l.strip() for l in lines[-100:]]})
     except: return jsonify({"logs": []})
+    
+@app.route("/clear-trades", methods=["POST"])
+def clear_trades():
+    try:
+        if TRADES_PATH.exists():
+            TRADES_PATH.unlink()
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/clear-logs", methods=["POST"])
+def clear_logs():
+    try:
+        if LOG_PATH.exists():
+            LOG_PATH.unlink()
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3000)
