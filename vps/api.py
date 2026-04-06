@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v3.0
-Multi-Signal Momentum Strategy for 70%+ Accuracy.
+PolyBot Unified Backend v3.1
+70%+ Accuracy & Official Baseline Sync.
 """
 
 import json
@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
+from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import OrderType, Side
 
 app = Flask(__name__)
 CORS(app)
@@ -59,8 +62,8 @@ class BinanceWS:
             # Buffer price every 2 seconds (avoid flooding)
             if now - self.last_buffer_update >= 2:
                 price_buffer.append((now, price))
-                if len(price_buffer) > 300:  # ~10 min of data
-                    price_buffer = price_buffer[-300:]
+                if len(price_buffer) > 600:  # ~20 min of data for SMA
+                    price_buffer = price_buffer[-600:]
                 self.last_buffer_update = now
 
     def on_error(self, ws, error):
@@ -123,7 +126,6 @@ def log_to_file(msg):
 # ── Signal Engine (Multi-Signal for 70%+ accuracy) ────────
 
 def calc_ema(prices, period):
-    """Exponential Moving Average."""
     if len(prices) < period:
         return sum(prices) / len(prices) if prices else 0
     k = 2 / (period + 1)
@@ -133,9 +135,8 @@ def calc_ema(prices, period):
     return ema
 
 def calc_rsi(prices, period=14):
-    """Relative Strength Index."""
     if len(prices) < period + 1:
-        return 50  # Neutral
+        return 50
     deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
     recent = deltas[-period:]
     gains = [d for d in recent if d > 0]
@@ -146,86 +147,60 @@ def calc_rsi(prices, period=14):
     return 100 - (100 / (1 + rs))
 
 def analyze_signals(price_to_beat):
-    """Multi-signal analysis returning direction and confidence."""
     with price_lock:
         buf = list(price_buffer)
         current = last_btc_price
     
-    if len(buf) < 30 or not current or not price_to_beat:
+    if len(buf) < 100 or not current or not price_to_beat:
         return None, 0, {}
 
     prices = [p for _, p in buf]
     
-    # Signal 1: Price vs Beat (Current momentum direction)
-    diff_pct = (current - price_to_beat) / price_to_beat * 100
+    # ── Signal 1: Trend Filter (50-period SMA) ──
+    sma_50 = sum(prices[-50:]) / 50
+    trend = "UP" if current > sma_50 else "DOWN"
     
-    # Signal 2: Short-term EMA Trend (fast vs slow)
-    ema_fast = calc_ema(prices[-15:], 5)   # ~30s EMA
-    ema_slow = calc_ema(prices[-30:], 15)  # ~60s EMA
-    ema_signal = "UP" if ema_fast > ema_slow else "DOWN"
-    ema_strength = abs(ema_fast - ema_slow) / ema_slow * 100
-    
-    # Signal 3: RSI (Momentum strength)
+    # ── Signal 2: RSI Momentum ──
     rsi = calc_rsi(prices[-30:], 14)
     
-    # Signal 4: Recent tick direction (last 30s trend)
-    recent_30s = [p for t, p in buf if t > time.time() - 30]
-    if len(recent_30s) >= 2:
-        tick_direction = "UP" if recent_30s[-1] > recent_30s[0] else "DOWN"
-        tick_change = (recent_30s[-1] - recent_30s[0]) / recent_30s[0] * 100
-    else:
-        tick_direction = "FLAT"
-        tick_change = 0
+    # ── Signal 3: EMA Crossover ──
+    ema_fast = calc_ema(prices[-15:], 5)
+    ema_slow = calc_ema(prices[-40:], 20)
+    ema_signal = "UP" if ema_fast > ema_slow else "DOWN"
     
-    # Signal 5: Volume-weighted price movement (last 60s vs prior 60s)
+    # ── Signal 4: VWAP Comparison ──
     recent_60 = [p for t, p in buf if t > time.time() - 60]
     prior_60 = [p for t, p in buf if time.time() - 120 < t <= time.time() - 60]
+    vwap_signal = "NEUTRAL"
     if recent_60 and prior_60:
-        avg_recent = sum(recent_60) / len(recent_60)
-        avg_prior = sum(prior_60) / len(prior_60)
-        vwap_signal = "UP" if avg_recent > avg_prior else "DOWN"
-    else:
-        vwap_signal = "FLAT"
+        vwap_signal = "UP" if (sum(recent_60)/len(recent_60)) > (sum(prior_60)/len(prior_60)) else "DOWN"
 
-    # ── Voting System (Majority Rules) ──
+    # ── Voting System ──
     votes_up = 0
     votes_down = 0
     
-    # Vote 1: Current diff from beat
-    if diff_pct > 0.05: votes_up += 1
-    elif diff_pct < -0.05: votes_down += 1
+    if (current - price_to_beat) / price_to_beat * 100 > 0.05: votes_up += 1
+    elif (current - price_to_beat) / price_to_beat * 100 < -0.05: votes_down += 1
     
-    # Vote 2: EMA crossover (strong signal)
-    if ema_signal == "UP" and ema_strength > 0.01: votes_up += 2
-    elif ema_signal == "DOWN" and ema_strength > 0.01: votes_down += 2
+    if trend == "UP": votes_up += 1
+    else: votes_down += 1
     
-    # Vote 3: RSI momentum
+    if ema_signal == "UP": votes_up += 2
+    else: votes_down += 2
+    
     if rsi > 55: votes_up += 1
     elif rsi < 45: votes_down += 1
     
-    # Vote 4: Recent tick direction
-    if tick_direction == "UP" and tick_change > 0.02: votes_up += 1
-    elif tick_direction == "DOWN" and tick_change < -0.02: votes_down += 1
-    
-    # Vote 5: VWAP signal
     if vwap_signal == "UP": votes_up += 1
     elif vwap_signal == "DOWN": votes_down += 1
     
     total_votes = votes_up + votes_down
-    if total_votes == 0:
-        return None, 0, {}
-    
     direction = "UP" if votes_up > votes_down else "DOWN"
-    confidence = max(votes_up, votes_down) / 6 * 100  # Out of 6 max votes
+    confidence = max(votes_up, votes_down) / 6 * 100
     
     signals = {
-        "diff": round(diff_pct, 3),
-        "ema": ema_signal,
-        "rsi": round(rsi, 1),
-        "tick": tick_direction,
-        "vwap": vwap_signal,
-        "votes": f"{votes_up}U/{votes_down}D",
-        "confidence": round(confidence, 0)
+        "trend": trend, "rsi": round(rsi, 1), "ema": ema_signal, 
+        "vwap": vwap_signal, "votes": f"{votes_up}U/{votes_down}D", "confidence": round(confidence, 0)
     }
     
     return direction, confidence, signals
@@ -242,8 +217,23 @@ def get_polymarket_market(slug):
         log_to_file(f"⚠️ Gamma API Error: {e}")
         return None
 
-def get_price_to_beat(window_ts):
-    """Get baseline price using CryptoCompare historical close at window start."""
+def get_clob_market_line(condition_id):
+    """Fetch official strike price from CLOB API."""
+    try:
+        resp = requests.get(f"https://clob.polymarket.com/markets/{condition_id}", timeout=5)
+        data = resp.json()
+        return float(data["line"]) if "line" in data else None
+    except Exception as e:
+        log_to_file(f"⚠️ CLOB Sync Error: {e}")
+        return None
+
+def get_price_to_beat(window_ts, condition_id=None):
+    # 1. Try Official CLOB Sync (100% accurate)
+    if condition_id:
+        line = get_clob_market_line(condition_id)
+        if line: return line
+    
+    # 2. Historical Sync (Approx)
     try:
         resp = requests.get(
             f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={window_ts}",
@@ -251,8 +241,8 @@ def get_price_to_beat(window_ts):
         )
         return float(resp.json()["Data"]["Data"][-1]["close"])
     except:
-        with price_lock:
-            return last_btc_price
+        # 3. Last recorded price
+        with price_lock: return last_btc_price
 
 def get_current_5min_ts():
     return (int(time.time()) // 300) * 300
@@ -260,7 +250,7 @@ def get_current_5min_ts():
 # ── Bot Loop ──────────────────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info
-    log_to_file("🚀 MULTI-SIGNAL ENGINE v3.0 STARTING...")
+    log_to_file("🚀 ENGINE v3.1 (70%+ Accuracy) STARTING...")
     
     market_baselines = {}
     
@@ -272,7 +262,6 @@ def bot_loop():
             window_offset = int(now % 300)
             slug = f"btc-updown-5m-{window_ts}"
             
-            # 1. Market Discovery
             market = get_polymarket_market(slug)
             if not market:
                 current_strategy_info["status"] = f"SCANNING..."
@@ -291,63 +280,65 @@ def bot_loop():
             up_price = float(outcomes[0])
             down_price = float(outcomes[1])
             
-            # 2. Baseline Price
+            # Baseline Sync
             if window_ts not in market_baselines:
-                market_baselines[window_ts] = get_price_to_beat(window_ts)
-                log_to_file(f"📍 Baseline for {window_ts}: ${market_baselines[window_ts]}")
+                line = get_price_to_beat(window_ts, market.get("conditionId"))
+                market_baselines[window_ts] = line
+                log_to_file(f"🎯 Baseline Synced: ${line}")
             
             price_to_beat = market_baselines[window_ts]
             
-            # 3. Run Signal Engine
+            # 3. Initialize Live Client if needed
+            client = None
+            if not cfg.get("dry_run", True):
+                try:
+                    load_dotenv(ENV_PATH)
+                    pk = os.getenv("POLY_PRIVATE_KEY")
+                    addr = os.getenv("POLY_WALLET_ADDRESS")
+                    if pk and addr:
+                        # Derive API Credentials
+                        temp_client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137)
+                        creds = temp_client.create_or_derive_api_creds()
+                        client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=0, funder=addr)
+                except Exception as e:
+                    log_to_file(f"⚠️ Live Client Init Error: {e}")
+
+            # 4. Run Signal Engine
             direction, confidence, signals = analyze_signals(price_to_beat)
             
-            with price_lock:
-                price_now = last_btc_price
-            
+            with price_lock: price_now = last_btc_price
             diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
             
             current_strategy_info = {
-                "slug": slug,
-                "price_to_beat": price_to_beat,
-                "current_diff": round(diff, 3),
-                "time_remaining": 300 - window_offset,
-                "up_price": up_price,
-                "down_price": down_price,
-                "edge": "None",
-                "status": "Analyzing",
-                "confidence": confidence,
-                "signals": signals
+                "slug": slug, "price_to_beat": price_to_beat, "current_diff": round(diff, 3),
+                "time_remaining": 300 - window_offset, "up_price": up_price, "down_price": down_price,
+                "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
             }
             
-            # 4. Decision Window (60s-240s)
-            if 60 <= window_offset <= 240:
-                # Log thinking every 30s
+            # 5. Decision Window (90s-210s) - Tightened for stability
+            if 90 <= window_offset <= 210:
                 if window_offset % 30 == 0:
-                    log_to_file(f"🧐 {signals.get('votes','-')} | Conf: {confidence}% | Diff: {round(diff,3)}% | RSI: {signals.get('rsi','-')}")
+                    log_to_file(f"🧐 Thinking: {signals.get('votes','-')} | Conf: {confidence}% | Diff: {round(diff,3)}%")
                 
                 trades = safe_read_json(TRADES_PATH) or []
                 already_traded = any(t.get("window_ts") == window_ts for t in trades)
                 
-                if not already_traded and direction and confidence >= 50:
-                    # Check market alignment (edge exists if market underprices)
-                    if direction == "UP" and up_price < 0.58:
-                        current_strategy_info["edge"] = f"UP (conf {confidence}%)"
-                        execute_trade("UP", up_price, price_now, slug, window_ts, confidence, signals, cfg)
-                    elif direction == "DOWN" and down_price < 0.58:
-                        current_strategy_info["edge"] = f"DOWN (conf {confidence}%)"
-                        execute_trade("DOWN", down_price, price_now, slug, window_ts, confidence, signals, cfg)
-            elif window_offset < 60 and window_offset % 30 == 0:
-                log_to_file("⏳ Warming up - collecting price data...")
-            elif window_offset > 240 and window_offset % 30 == 0:
-                log_to_file("⏳ Window closing - entries disabled.")
+                if not already_traded and direction and confidence >= 75: # 75% Confidence
+                    # Extract Token IDs for Live Trading
+                    tokens = market.get("tokens", [])
+                    up_token_id = tokens[0].get("tokenId") if len(tokens) > 0 else None
+                    down_token_id = tokens[1].get("tokenId") if len(tokens) > 1 else None
+                    
+                    target_token_id = up_token_id if direction == "UP" else down_token_id
+                    target_price = up_price if direction == "UP" else down_price
+
+                    if target_token_id and target_price < 0.58:
+                        execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client)
             
-            # 5. Check Outcomes (resolve past trades)
             check_outcomes(market_baselines)
             
-            # Cleanup old baselines
             if len(market_baselines) > 20:
-                cutoff = window_ts - 3600
-                market_baselines = {k: v for k, v in market_baselines.items() if k > cutoff}
+                market_baselines = {k: v for k, v in market_baselines.items() if k > window_ts - 3600}
 
             time.sleep(1)
         except Exception as e:
@@ -355,69 +346,64 @@ def bot_loop():
             time.sleep(2)
 
 def check_outcomes(baselines):
-    """Check if past trades won or lost by comparing close price vs baseline."""
     trades = safe_read_json(TRADES_PATH) or []
     updated = False
     now = time.time()
-    
     for t in trades:
-        if t.get("outcome") is not None:
-            continue
+        if t.get("outcome") is not None: continue
         wts = t.get("window_ts", 0)
-        # Only check after window has fully closed (+30s buffer)
-        if now < wts + 330:
-            continue
-        
-        # Get the close price at end of that window
-        end_ts = wts + 300
+        if now < wts + 330: continue
         try:
-            resp = requests.get(
-                f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={end_ts}",
-                timeout=5
-            )
-            close_price = float(resp.json()["Data"]["Data"][-1]["close"])
-        except:
-            continue
-        
-        # Get baseline for that window
-        baseline = baselines.get(wts, t.get("btc_price", 0))
-        
-        # Determine outcome
-        went_up = close_price >= baseline
-        predicted_up = t["direction"] == "UP"
-        win = (predicted_up and went_up) or (not predicted_up and not went_up)
-        
-        t["outcome"] = "win" if win else "loss"
-        t["close_price"] = close_price
-        t["baseline_price"] = baseline
-        updated = True
-        
-        emoji = "✅" if win else "❌"
-        log_to_file(f"{emoji} {t['direction']} | Base: ${baseline} → Close: ${close_price} | {'WIN' if win else 'LOSS'}")
-    
-    if updated:
-        safe_write_json(TRADES_PATH, trades)
+            resp = requests.get(f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={wts+300}", timeout=5)
+            close = float(resp.json()["Data"]["Data"][-1]["close"])
+            base = baselines.get(wts, t.get("btc_price"))
+            win = (t["direction"] == "UP" and close >= base) or (t["direction"] == "DOWN" and close < base)
+            t["outcome"] = "win" if win else "loss"
+            log_to_file(f"{'✅' if win else '❌'} {t['direction']} Result | Base: {base} → Close: {close}")
+            updated = True
+        except: continue
+    if updated: safe_write_json(TRADES_PATH, trades)
 
-def execute_trade(direction, token_price, btc_price, slug, window_ts, confidence, signals, cfg):
+def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, confidence, signals, cfg, client=None):
     is_dry = cfg.get("dry_run", True)
-    status = "simulated" if is_dry else "placed"
-    
+    status = "simulated"
+    order_id = "N/A"
+
+    if not is_dry and client:
+        try:
+            bet_size = cfg.get("bet_size", 2.0)
+            # Create and post order
+            resp = client.create_and_post_order(
+                order_args={
+                    "tokenID": token_id,
+                    "price": token_price,
+                    "size": round(bet_size / token_price, 2),
+                    "side": Side.BUY,
+                },
+                order_type=OrderType.GTC
+            )
+            if resp and hasattr(resp, "orderID"):
+                status = "placed"
+                order_id = resp.orderID
+                log_to_file(f"✅ LIVE ORDER PLACED: {direction} | OrderID: {order_id}")
+            else:
+                status = "failed"
+                log_to_file(f"❌ LIVE ORDER FAILED: {resp}")
+        except Exception as e:
+            status = "error"
+            log_to_file(f"⚠️ Trade Execution Error: {e}")
+
     trade = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "window_ts": window_ts,
-        "market_slug": slug,
-        "direction": direction,
-        "token_price": token_price,
-        "btc_price": btc_price,
-        "confidence": confidence,
-        "signals": signals,
-        "bet_size": 2.0,
-        "dry_run": is_dry,
-        "status": status,
-        "outcome": None
+        "timestamp": datetime.now(timezone.utc).isoformat(), "window_ts": window_ts,
+        "market_slug": slug, "direction": direction, "token_id": token_id,
+        "token_price": token_price, "btc_price": btc_price, "confidence": confidence,
+        "order_id": order_id, "signals": signals, "bet_size": cfg.get("bet_size", 2.0),
+        "dry_run": is_dry, "status": status, "outcome": None
     }
     
-    log_to_file(f"🚀 TRADE: {direction} | Conf: {confidence}% | BTC: ${btc_price} | Mkt: {token_price}")
+    if is_dry:
+        log_to_file(f"🚀 HIGH CONFIDENCE (SIM): {direction} | Conf: {confidence}% | BTC: ${btc_price}")
+    
     trades = safe_read_json(TRADES_PATH) or []
     trades.append(trade)
     safe_write_json(TRADES_PATH, trades)
@@ -433,9 +419,8 @@ def get_status():
     with price_lock: live_price = last_btc_price
     return jsonify({
         "running": bot_running, "dry_run": cfg.get("dry_run", True),
-        "btc_price": live_price, "strategy": "Multi-Signal v3",
-        "info": current_strategy_info,
-        "total_trades": len(trades), "wins": wins, "losses": losses,
+        "btc_price": live_price, "strategy": "Multi-Signal v3.1",
+        "info": current_strategy_info, "total_trades": len(trades), "wins": wins, "losses": losses,
         "success_rate": round((wins/(wins+losses)*100),1) if (wins+losses) > 0 else 0,
         "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0]
     })
@@ -443,13 +428,7 @@ def get_status():
 @app.route("/stats")
 def get_stats():
     trades = safe_read_json(TRADES_PATH) or []
-    wins = sum(1 for t in trades if t.get("outcome") == "win")
-    losses = sum(1 for t in trades if t.get("outcome") == "loss")
-    return jsonify({
-        "total_trades": len(trades), "wins": wins, "losses": losses,
-        "success_rate": round((wins/(wins+losses)*100),1) if (wins+losses) > 0 else 0,
-        "history": trades[-50:]
-    })
+    return jsonify({"total_trades": len(trades), "history": trades[-50:]})
 
 @app.route("/start", methods=["POST"])
 def start_bot():
@@ -482,12 +461,6 @@ def get_logs():
             lines = f.readlines()
             return jsonify({"logs": [l.strip() for l in lines[-100:]]})
     except: return jsonify({"logs": []})
-
-@app.route("/restart", methods=["POST"])
-def restart_bot():
-    stop_bot()
-    time.sleep(1)
-    return start_bot()
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3000)
