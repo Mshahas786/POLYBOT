@@ -553,9 +553,13 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
     if is_dry:
         log_to_file(f"🚀 HIGH CONFIDENCE (SIM): {direction} | Conf: {confidence}% | BTC: ${btc_price}")
     
-    trades = safe_read_json(TRADES_PATH) or []
-    trades.append(trade)
-    safe_write_json(TRADES_PATH, trades)
+    # Only save to history if actually placed or simulated
+    if status in ["placed", "simulated"]:
+        trades = safe_read_json(TRADES_PATH) or []
+        trades.append(trade)
+        safe_write_json(TRADES_PATH, trades)
+    else:
+        log_to_file(f"⚠️ Trade skipped recording due to status: {status}")
 
 # ── Redemption Logic ───────────────────────────────────────
 
