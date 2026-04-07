@@ -710,7 +710,31 @@ def get_status():
 @app.route("/stats")
 def get_stats():
     trades = safe_read_json(TRADES_PATH) or []
-    return jsonify({"total_trades": len(trades), "history": trades[-50:]})
+    period = request.args.get("period", "all")
+    
+    filtered = trades
+    now = datetime.now(timezone.utc)
+    
+    if period == "30m":
+        cutoff = now - timedelta(minutes=30)
+        filtered = [t for t in trades if datetime.fromisoformat(t["timestamp"]) > cutoff]
+    elif period == "1h":
+        cutoff = now - timedelta(hours=1)
+        filtered = [t for t in trades if datetime.fromisoformat(t["timestamp"]) > cutoff]
+    elif period == "24h":
+        cutoff = now - timedelta(hours=24)
+        filtered = [t for t in trades if datetime.fromisoformat(t["timestamp"]) > cutoff]
+        
+    wins = sum(1 for t in filtered if t.get("outcome") == "win")
+    losses = sum(1 for t in filtered if t.get("outcome") == "loss")
+    
+    return jsonify({
+        "total_trades": len(filtered),
+        "wins": wins,
+        "losses": losses,
+        "success_rate": round((wins/(wins+losses)*100),1) if (wins+losses) > 0 else 0,
+        "history": filtered[-100:]  # Limit to last 100 for performance
+    })
 
 @app.route("/start", methods=["POST"])
 def start_bot():

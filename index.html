@@ -1303,10 +1303,17 @@
                 const resp = await fetch(VPS_URL + '/stats?period=' + currentFilter);
                 if (resp.ok) {
                     data = await resp.json();
-                    if (document.getElementById('statSuccess')) document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-                    if (document.getElementById('statUp')) document.getElementById('statUp').textContent = data.wins || 0;
-                    if (document.getElementById('statDown')) document.getElementById('statDown').textContent = data.losses || 0;
-                    // document.getElementById('statTrades').textContent = data.total_trades || 0;
+                    
+                    // Update main metrics from the filtered set
+                    if (document.getElementById('statSuccess')) {
+                        document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
+                    }
+                    if (document.getElementById('statTotal')) {
+                        const wins = data.wins || 0;
+                        const losses = data.losses || 0;
+                        const total = data.total_trades || 0;
+                        document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+                    }
                 } else {
                     const fallback = await fetch(VPS_URL + '/trades?limit=50');
                     data = await fallback.json();
