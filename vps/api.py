@@ -369,60 +369,63 @@ def bot_loop():
                 except Exception as e:
                     log_to_file(f"⚠️ Live Client Init Error: {e}")
 
-            # 4. Run Signal Engine
-            direction, confidence, signals = analyze_signals(price_to_beat)
-            
-            with price_lock: price_now = last_btc_price
-            
-            # Heartbeat log only once at the start of every minute
-            if int(now) % 60 == 0:
-                log_to_file(f"🤖 BTC: ${price_now} | Target: ${price_to_beat} | Conf: {confidence}%")
-            diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
-            
-            current_strategy_info = {
-                "slug": slug, "price_to_beat": price_to_beat, "current_diff": round(diff, 3),
-                "time_remaining": 300 - window_offset, "up_price": up_price, "down_price": down_price,
-                "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
-            }
-            
-            # 5. Decision Window (30s-285s) - Active for almost the full 5 minutes
-            if 30 <= window_offset <= 285:
-                trades = safe_read_json(TRADES_PATH) or []
-                
-                # Filter trades in the last hour for limit
-                one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-                recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
-                
-                max_hour = cfg.get("max_trades_per_hour", 12)
-                already_traded = any(t.get("window_ts") == window_ts for t in trades)
-                
-                # Extract Token IDs
-                tokens = market.get("tokens", [])
-                clob_ids = market.get("clobTokenIds", "[]") # Some markets use this as a string
-                if isinstance(clob_ids, str):
-                    try: clob_ids = json.loads(clob_ids)
-                    except: clob_ids = []
-                
-                up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
-                down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
-                
-                target_token_id = up_token_id if direction == "UP" else down_token_id
-                target_price = up_price if direction == "UP" else down_price
+            trades = safe_read_json(TRADES_PATH) or []
+            already_traded = any(t.get("window_ts") == window_ts for t in trades)
 
-                # Diagnostic log removed for cleaner output
+            if already_traded:
+                # Bypass signal analysis to save resources
+                current_strategy_info = {
+                    "slug": slug, "price_to_beat": price_to_beat, "current_diff": 0,
+                    "time_remaining": 300 - window_offset, "up_price": up_price, "down_price": down_price,
+                    "edge": "None", "status": "Waiting for Result... ⏳", "confidence": 0, "signals": {}
+                }
+            else:
+                # 4. Run Signal Engine
+                direction, confidence, signals = analyze_signals(price_to_beat)
                 
-                min_conf = cfg.get("min_confidence", 60)
-                if direction and confidence >= min_conf: 
-                    if already_traded:
-                        pass
-                    elif len(recent_trades) >= max_hour:
-                        pass
-                    elif not client and not cfg.get("dry_run", True):
-                        pass
-                    elif target_token_id:
-                        execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client)
-                    else:
-                        pass
+                with price_lock: price_now = last_btc_price
+                
+                # Heartbeat log only once at the start of every minute
+                if int(now) % 60 == 0:
+                    log_to_file(f"🤖 BTC: ${price_now} | Target: ${price_to_beat} | Conf: {confidence}%")
+                diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
+                
+                current_strategy_info = {
+                    "slug": slug, "price_to_beat": price_to_beat, "current_diff": round(diff, 3),
+                    "time_remaining": 300 - window_offset, "up_price": up_price, "down_price": down_price,
+                    "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
+                }
+                
+                # 5. Decision Window (150s-285s) - Active in the latter half of the window
+                if 150 <= window_offset <= 285:
+                    
+                    # Filter trades in the last hour for limit
+                    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                    recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
+                    
+                    max_hour = cfg.get("max_trades_per_hour", 12)
+                
+                    # Extract Token IDs
+                    tokens = market.get("tokens", [])
+                    clob_ids = market.get("clobTokenIds", "[]") # Some markets use this as a string
+                    if isinstance(clob_ids, str):
+                        try: clob_ids = json.loads(clob_ids)
+                        except: clob_ids = []
+                    
+                    up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
+                    down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
+                    
+                    target_token_id = up_token_id if direction == "UP" else down_token_id
+                    target_price = up_price if direction == "UP" else down_price
+    
+                    min_conf = cfg.get("min_confidence", 60)
+                    if direction and confidence >= min_conf: 
+                        if len(recent_trades) >= max_hour:
+                            pass
+                        elif not client and not cfg.get("dry_run", True):
+                            pass
+                        elif target_token_id:
+                            execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client)
             
             check_outcomes(market_baselines)
             
