@@ -19,26 +19,27 @@
         }
 
         :root {
-            --bg: #07070d;
-            --surface: #0e0e16;
-            --card: #13131d;
-            --card-hover: #181826;
-            --border: #1e1e2e;
-            --border-glow: rgba(240, 180, 41, 0.15);
+            --bg: #05050a;
+            --surface: rgba(14, 14, 22, 0.85);
+            --card: rgba(19, 19, 29, 0.7);
+            --card-hover: rgba(24, 24, 38, 0.85);
+            --border: rgba(40, 40, 60, 0.4);
+            --border-glow: rgba(240, 180, 41, 0.25);
             --accent: #f0b429;
-            --accent-dim: rgba(240, 180, 41, 0.15);
-            --accent-glow: rgba(240, 180, 41, 0.3);
-            --green: #00d4aa;
-            --green-dim: rgba(0, 212, 170, 0.12);
-            --red: #ff4757;
-            --red-dim: rgba(255, 71, 87, 0.12);
-            --blue: #4d9fff;
-            --blue-dim: rgba(77, 159, 255, 0.12);
+            --accent-dim: rgba(240, 180, 41, 0.1);
+            --accent-glow: rgba(240, 180, 41, 0.45);
+            --green: #00ffcc;
+            --green-dim: rgba(0, 255, 204, 0.1);
+            --red: #ff3e4e;
+            --red-dim: rgba(255, 62, 78, 0.1);
+            --blue: #3b82f6;
+            --blue-dim: rgba(59, 130, 246, 0.1);
             --purple: #a855f7;
-            --text: #e8e8f0;
-            --text-secondary: #9898b0;
-            --muted: #5a5a72;
-            --radius: 14px;
+            --text: #ffffff;
+            --text-secondary: #94a3b8;
+            --muted: #475569;
+            --radius: 18px;
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
         body {
@@ -226,12 +227,15 @@
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s;
+            padding: 20px;
+            margin-bottom: 14px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: var(--shadow);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .card:hover { border-color: var(--border-glow); }
+        .card:hover { border-color: var(--accent-glow); transform: translateY(-2px); }
 
         .card-title {
             font-size: 10px;
@@ -286,16 +290,54 @@
             letter-spacing: 0.04em;
         }
 
-        /* ── BTC Price Banner ──────────────────────── */
-        .price-banner {
-            background: linear-gradient(135deg, var(--card) 0%, rgba(240,180,41,0.06) 100%);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 12px;
+        /* ── Liquidity Health ────────────────────── */
+        .liquidity-wrap { margin-top: 10px; }
+        .liquidity-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 6px 0;
+        }
+        .liquidity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--green) 100%);
+            transition: width 1s ease;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .liquidity-stats {
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            font-size: 9px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--muted);
+        }
+
+        /* ── Signal Heatmap ───────────────────────── */
+        .signal-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .signal-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px;
+            text-align: center;
+        }
+        .signal-val {
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .signal-name {
+            font-size: 8px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .price-label {
@@ -795,6 +837,31 @@
             </div>
         </div>
 
+        <!-- Liquidity Health -->
+        <div class="card">
+            <div class="card-title">💰 LIQUIDITY HEALTH</div>
+            <div class="liquidity-wrap">
+                <div class="liquidity-bar"><div class="liquidity-fill" id="liqFill" style="width: 0%"></div></div>
+                <div class="liquidity-stats">
+                    <span id="liqBalance">$0.00 USDC</span>
+                    <span id="liqCapacity">0 Trades Remaining</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signal Heatmap -->
+        <div class="card">
+            <div class="card-title">📈 REAL-TIME SIGNALS</div>
+            <div class="signal-grid" id="signalGrid">
+                <div class="signal-item"><div class="signal-val" id="sigSMA">--</div><div class="signal-name">SMA 20</div></div>
+                <div class="signal-item"><div class="signal-val" id="sigRSI">--</div><div class="signal-name">RSI 14</div></div>
+                <div class="signal-item"><div class="signal-val" id="sigEMA">--</div><div class="signal-name">EMA 9</div></div>
+                <div class="signal-item"><div class="signal-val" id="sigVWAP">--</div><div class="signal-name">VWAP</div></div>
+                <div class="signal-item"><div class="signal-val" id="sigVOL">--</div><div class="signal-name">VOLTY</div></div>
+                <div class="signal-item"><div class="signal-val" id="sigVOTES">--</div><div class="signal-name">VOTES</div></div>
+            </div>
+        </div>
+
         <button class="refresh-btn" onclick="fetchAll()">⟳ REFRESH</button>
 
         <!-- Recent Trades -->
@@ -1095,12 +1162,54 @@
                 if (bal) {
                     const balanceFloat = parseFloat(data.account.balance) || 0;
                     bal.textContent = '$' + balanceFloat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    
+                    // Liquidity Health calculation
+                    const betSize = data.bet_size || 2.0;
+                    const capacity = Math.floor(balanceFloat / betSize);
+                    const fillPercent = Math.min(100, (capacity / 20) * 100); // 20 trades is 'Full' health
+                    
+                    if (document.getElementById('liqFill')) {
+                        document.getElementById('liqFill').style.width = fillPercent + '%';
+                        document.getElementById('liqBalance').textContent = '$' + balanceFloat.toFixed(2) + ' USDC';
+                        document.getElementById('liqCapacity').textContent = capacity + ' Trades Remaining';
+                        
+                        // Color coding
+                        const fill = document.getElementById('liqFill');
+                        if (capacity < 5) fill.style.background = 'var(--red)';
+                        else if (capacity < 10) fill.style.background = 'var(--accent)';
+                        else fill.style.background = 'linear-gradient(90deg, var(--accent) 0%, var(--green) 100%)';
+                    }
                 }
                 if (pnl) {
                     const pnlFloat = parseFloat(data.account.pnl) || 0;
                     pnl.textContent = (pnlFloat >= 0 ? '+' : '') + '$' + pnlFloat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     pnl.className = 'stat-value ' + (pnlFloat > 0 ? 'green' : (pnlFloat < 0 ? 'red' : ''));
                 }
+            }
+
+            // Signals Heatmap Update
+            if (data.info && data.info.signals) {
+                const s = data.info.signals;
+                const setSig = (id, val, isBool = false) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.textContent = val;
+                    if (isBool) {
+                        el.style.color = val === 'UP' ? 'var(--green)' : val === 'DOWN' ? 'var(--red)' : 'var(--muted)';
+                    } else {
+                        // Numeric RSI logic
+                        if (id === 'sigRSI') {
+                            const r = parseFloat(val);
+                            el.style.color = r > 60 ? 'var(--green)' : r < 40 ? 'var(--red)' : 'var(--text)';
+                        }
+                    }
+                };
+                setSig('sigSMA', s.SMA || '--', true);
+                setSig('sigRSI', s.RSI || '--');
+                setSig('sigEMA', s.EMA || '--', true);
+                setSig('sigVWAP', s.VWAP || '--', true);
+                setSig('sigVOL', s.Volatility || '--');
+                setSig('sigVOTES', s.Votes || '--');
             }
 
             // Button states

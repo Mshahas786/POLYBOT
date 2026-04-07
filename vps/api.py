@@ -703,7 +703,8 @@ def get_status():
         "info": current_strategy_info, "total_trades": len(trades), "wins": wins, "losses": losses,
         "success_rate": round((wins/(wins+losses)*100),1) if (wins+losses) > 0 else 0,
         "uptime": str(datetime.now(timezone.utc) - start_time).split(".")[0],
-        "account": account_stats
+        "account": account_stats,
+        "bet_size": float(cfg.get("bet_size", 2.0))
     })
 
 @app.route("/stats")
