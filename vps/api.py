@@ -515,11 +515,13 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
             
             # 1. Create the Market Order Args
-            # We spend 'bet_size' USDC. The SDK handles the rest.
+            # We use an aggressive price of 0.99 to ensure we match with the BEST available price 
+            # on the order book (Polymarket CLOB will still fill at the lowest possible price).
             order_args = MarketOrderArgs(
                 token_id=token_id,
                 amount=bet_size,
-                side="BUY"
+                side="BUY",
+                price=0.99
             )
             
             # 2. Create and Post in one go if supported, or use the two-step process
