@@ -366,8 +366,8 @@ def bot_loop():
                     pk = os.getenv("POLY_PRIVATE_KEY")
                     addr = os.getenv("POLY_WALLET_ADDRESS")
                     
-                    # Refresh Balance & P&L every 10 minutes (or if never updated)
-                    if addr and (time.time() - account_stats["last_updated"] > 600):
+                    # Refresh Balance & P&L every 2 minutes (fresher data)
+                    if addr and (time.time() - account_stats["last_updated"] > 120):
                         threading.Thread(target=fetch_account_stats, args=(addr,), daemon=True).start()
 
                     if pk and addr:
