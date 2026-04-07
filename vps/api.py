@@ -19,10 +19,13 @@ from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import MarketOrderArgs
 from web3 import Web3
 
-# ── Polymarket Registry ─────────────────────────────────────
-USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-CTF_CONTRACT = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
-POLYGON_RPC = "https://rpc.ankr.com/polygon"
+# RPC Configuration (Prioritize .env, then LlamaRPC, then official)
+POLYGON_RPC = os.getenv("POLYGON_RPC", "https://polygon.llamarpc.com") 
+FALLBACK_RPCS = [
+    "https://1rpc.io/matic",
+    "https://polygon-rpc.com",
+    "https://poly-rpc.gateway.pokt.network"
+]
 
 CTF_ABI = [
     {
