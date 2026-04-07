@@ -1077,8 +1077,8 @@
                 document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
             }
             
-            document.getElementById('statUp').textContent = data.wins || 0;
-            document.getElementById('statDown').textContent = data.losses || 0;
+            if (document.getElementById('statUp')) document.getElementById('statUp').textContent = data.wins || 0;
+            if (document.getElementById('statDown')) document.getElementById('statDown').textContent = data.losses || 0;
 
             // Account Stats (Balance & P&L)
             if (data.account) {
@@ -1189,9 +1189,9 @@
                 const resp = await fetch(VPS_URL + '/stats?period=' + currentFilter);
                 if (resp.ok) {
                     data = await resp.json();
-                    document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-                    document.getElementById('statUp').textContent = data.wins || 0;
-                    document.getElementById('statDown').textContent = data.losses || 0;
+                    if (document.getElementById('statSuccess')) document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
+                    if (document.getElementById('statUp')) document.getElementById('statUp').textContent = data.wins || 0;
+                    if (document.getElementById('statDown')) document.getElementById('statDown').textContent = data.losses || 0;
                     // document.getElementById('statTrades').textContent = data.total_trades || 0;
                 } else {
                     const fallback = await fetch(VPS_URL + '/trades?limit=50');
