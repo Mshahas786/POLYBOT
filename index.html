@@ -832,8 +832,8 @@
                 <div class="stat-label">WIN RATE %</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="statStatus">--</div>
-                <div class="stat-label">STATUS</div>
+                <div class="stat-value blue" id="statTotal">--</div>
+                <div class="stat-label">TOTAL TRADES</div>
             </div>
         </div>
 
@@ -1139,8 +1139,9 @@
             }
 
             // Stats
-            document.getElementById('statStatus').textContent = data.running ? `🟢 ON (${data.wins || 0}/${data.losses || 0})` : `🔴 OFF (${data.wins || 0}/${data.losses || 0})`;
-            document.getElementById('statStatus').style.color = data.running ? 'var(--green)' : 'var(--red)';
+            if (document.getElementById('statTotal')) {
+                document.getElementById('statTotal').textContent = data.total_trades || 0;
+            }
             
             // Show real-time BTC price from WS
             if (data.btc_price) {
