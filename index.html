@@ -1065,7 +1065,7 @@
             }
 
             // Stats
-            document.getElementById('statStatus').textContent = data.running ? '🟢 ON' : '🔴 OFF';
+            document.getElementById('statStatus').textContent = data.running ? `🟢 ON (${data.wins || 0}/${data.losses || 0})` : `🔴 OFF (${data.wins || 0}/${data.losses || 0})`;
             document.getElementById('statStatus').style.color = data.running ? 'var(--green)' : 'var(--red)';
             
             // Show real-time BTC price from WS

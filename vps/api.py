@@ -422,10 +422,16 @@ def bot_loop():
             time.sleep(2)
 
 def check_outcomes(baselines):
+    global bot_running
     trades = safe_read_json(TRADES_PATH) or []
     updated = False
     now = time.time()
+    wins = 0
+    losses = 0
     for t in trades:
+        if t.get("outcome") == "win": wins += 1
+        elif t.get("outcome") == "loss": losses += 1
+
         if t.get("outcome") is not None: continue
         wts = t.get("window_ts", 0)
         if now < wts + 330: continue
@@ -437,8 +443,20 @@ def check_outcomes(baselines):
             t["outcome"] = "win" if win else "loss"
             log_to_file(f"{'✅' if win else '❌'} {t['direction']} Result | Base: {base} → Close: {close}")
             updated = True
+            
+            if win: wins += 1
+            else: losses += 1
         except: continue
-    if updated: safe_write_json(TRADES_PATH, trades)
+        
+    if updated: 
+        safe_write_json(TRADES_PATH, trades)
+        
+    total = wins + losses
+    if total >= 5 and bot_running:
+        win_rate = (wins / total) * 100
+        if win_rate < 50.0:
+            bot_running = False
+            log_to_file(f"🛑 AUTO-STOP: Win rate dropped below 50% ({win_rate:.1f}%). Engine Paused.")
 
 def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, confidence, signals, cfg, client=None):
     is_dry = cfg.get("dry_run", True)
@@ -462,7 +480,10 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             
             # 2. Create and Post in one go if supported, or use the two-step process
             # For market orders, create_market_order is the standard helper
-            resp = client.create_market_order(order_args)
+            signed_order = client.create_market_order(order_args)
+            
+            from py_clob_client.clob_types import OrderType
+            resp = client.post_order(signed_order.dict(), OrderType.FOK)
             
             if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
                 order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
