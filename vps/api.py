@@ -496,7 +496,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             signed_order = client.create_market_order(order_args)
             
             from py_clob_client.clob_types import OrderType
-            resp = client.post_order(signed_order, OrderType.FOK)
+            resp = client.post_order(signed_order, OrderType.FAK)
             
             if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
                 order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
