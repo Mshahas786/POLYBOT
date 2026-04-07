@@ -781,13 +781,9 @@
         <div class="last-update" id="lastUpdate">Connecting to VPS...</div>
     </div>
 
-    <!-- Tab Bar -->
     <div class="tabbar">
         <button class="tab active" onclick="showTab('dashboard', this)">
             <span class="tab-icon">◈</span>Dashboard
-        </button>
-        <button class="tab" onclick="showTab('trades', this)">
-            <span class="tab-icon">📊</span>Trades
         </button>
         <button class="tab" onclick="showTab('logs', this)">
             <span class="tab-icon">📋</span>Logs
@@ -872,46 +868,40 @@
             </div>
         </div>
 
-        <!-- Latest Logs -->
+        <!-- Log Summary -->
         <div class="card">
             <div class="card-title">⚡ LATEST ACTIVITY</div>
             <div id="latestLogs">
                 <div class="loading"><div class="spinner"></div><br>Loading...</div>
             </div>
         </div>
-    </div>
 
-    <!-- ═══════ Trades Page ═══════ -->
-    <div class="page" id="page-trades">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; overflow-x:auto;">
-            <button class="refresh-btn" style="width: auto !important; margin-bottom: 0; flex: 0 0 auto; padding: 8px 14px; font-size: 10px; margin-right: 8px;" onclick="fetchTrades()">⟳ REFRESH</button>
-            <div style="display:flex; flex-wrap:nowrap;">
-                <button class="filter-btn" onclick="setFilter('30m', this)" style="padding:6px 12px; border-radius:6px; font-family:JetBrains Mono, monospace; font-size:10px; background:var(--bg); border:1px solid var(--border); color:var(--text); margin-right:4px; cursor:pointer;">30M</button>
-                <button class="filter-btn" onclick="setFilter('1h', this)" style="padding:6px 12px; border-radius:6px; font-family:JetBrains Mono, monospace; font-size:10px; background:var(--bg); border:1px solid var(--border); color:var(--text); margin-right:4px; cursor:pointer;">1H</button>
-                <button class="filter-btn" onclick="setFilter('6h', this)" style="padding:6px 12px; border-radius:6px; font-family:JetBrains Mono, monospace; font-size:10px; background:var(--bg); border:1px solid var(--border); color:var(--text); margin-right:4px; cursor:pointer;">6H</button>
-                <button class="filter-btn" onclick="setFilter('24h', this)" style="padding:6px 12px; border-radius:6px; font-family:JetBrains Mono, monospace; font-size:10px; background:var(--bg); border:1px solid var(--border); color:var(--text); margin-right:4px; cursor:pointer;">24H</button>
-                <button class="filter-btn active" onclick="setFilter('all', this)" style="padding:6px 12px; border-radius:6px; font-family:JetBrains Mono, monospace; font-size:10px; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); cursor:pointer;">ALL</button>
-            </div>
-        </div>
-
-        <!-- P&L Chart -->
+        <!-- Trade Distribution Chart -->
         <div class="card">
-            <div class="card-title">📈 TRADE DISTRIBUTION</div>
+            <div class="card-title">📈 PERFORMANCE CHART</div>
             <div class="pnl-chart" id="pnlChart"></div>
             <div style="display:flex; justify-content:space-between; font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-top:4px;">
-                <span id="chartUpCount">UP: --</span>
-                <span id="chartDownCount">DOWN: --</span>
+                <span id="chartUpCount">WINS: --</span>
+                <span id="chartDownCount">LOSSES: --</span>
             </div>
         </div>
 
-        <!-- Trade History -->
-        <div class="card">
-            <div class="card-title">📋 TRADE HISTORY</div>
+        <!-- Unified Trade History -->
+        <div class="card" style="margin-bottom: 80px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div class="card-title" style="margin-bottom:0;">📋 TRADE HISTORY</div>
+                <div style="display:flex; gap:4px;">
+                    <button class="filter-btn" onclick="setFilter('1h', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">1H</button>
+                    <button class="filter-btn active" onclick="setFilter('all', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); cursor:pointer;">ALL</button>
+                </div>
+            </div>
             <div id="tradeHistory">
                 <div class="loading"><div class="spinner"></div><br>Loading trades...</div>
             </div>
         </div>
     </div>
+
+    <!-- Trades page removed (consolidated into dashboard) -->
 
     <!-- ═══════ Logs Page ═══════ -->
     <div class="page" id="page-logs">
@@ -1140,7 +1130,11 @@
 
             // Stats
             if (document.getElementById('statTotal')) {
-                document.getElementById('statTotal').textContent = data.total_trades || 0;
+                const wins = data.wins || 0;
+                const losses = data.losses || 0;
+                const total = data.total_trades || 0;
+                document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+                document.getElementById('statTotal').style.fontSize = '14px'; // Slightly smaller to fit breakdown
             }
             
             // Show real-time BTC price from WS
