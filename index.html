@@ -1547,9 +1547,14 @@
                 btn.textContent = 'Triggering Redemption...';
                 btn.disabled = true;
                 const resp = await fetch(VPS_URL + '/redeem', { method: 'POST' });
-                showToast('Redemption sequence started. Check logs.');
+                const data = await resp.json();
+                if (data.status === 'redemption_triggered') {
+                    showToast('✅ Redemption sequence started. Check logs.', 'success');
+                } else {
+                    showToast('⚠️ ' + (data.message || 'Triggered'), 'warn');
+                }
             } catch (e) {
-                showToast('Redemption trigger failed.', 'error');
+                showToast('❌ Redemption trigger failed: ' + e.message, 'error');
             } finally {
                 setTimeout(() => {
                     btn.textContent = originalText;

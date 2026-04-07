@@ -22,7 +22,7 @@ from web3 import Web3
 # ── Polymarket Registry ─────────────────────────────────────
 USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 CTF_CONTRACT = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
-POLYGON_RPC = "https://polygon-rpc.com"
+POLYGON_RPC = "https://rpc.ankr.com/polygon"
 
 CTF_ABI = [
     {
@@ -43,7 +43,8 @@ app = Flask(__name__)
 CORS(app)
 
 # ── Paths ──────────────────────────────────────────────────
-BOT_DIR = Path(os.path.expanduser("~/polybot"))
+# Use the current directory (vps folder) for all production data to ensure consistency across environments
+BOT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = BOT_DIR / "config.json"
 TRADES_PATH = BOT_DIR / "trades.json"
 ENV_PATH = BOT_DIR / ".env"
@@ -66,6 +67,7 @@ current_strategy_info = {
     "edge": "None", "status": "Inactive", "confidence": 0,
     "signals": {}
 }
+last_redeem_time = 0
 
 # ── Binance WebSocket ──────────────────────────────────────
 class BinanceWS:
@@ -448,9 +450,15 @@ def bot_loop():
             
             check_outcomes(market_baselines)
             
-            # 6. Periodic Redemption (Every 10 minutes)
-            if int(now) % 600 < 5: # Small 5s window every 10 min
+            # 6. Periodic Redemption (Exactly every 10 minutes)
+            # Use a global timestamp lock to prevent double-firing in the same window
+            global last_redeem_time
+            if now - last_redeem_time > 600:
+                log_to_file("💰 [AUTO] 10-Minute Settlement Heartbeat...")
+                # Ensure outcomes are checked first so we know what to redeem
+                check_outcomes(market_baselines)
                 threading.Thread(target=redeem_all_winners, daemon=True).start()
+                last_redeem_time = now
 
             if len(market_baselines) > 20:
                 market_baselines = {k: v for k, v in market_baselines.items() if k > window_ts - 3600}
@@ -507,11 +515,26 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
         try:
             bet_size = float(cfg.get("bet_size", 2.0))
             
+            # 0. PRE-FLIGHT BALANCE CHECK
+            try:
+                # Get fresh balance from CLOB
+                # With signature_type=1 and funder=proxy_wallet, this checks the Safe Proxy balance
+                from py_clob_client.clob_types import BalanceAllowanceParams
+                balance_data = client.get_balance()
+                current_balance = float(balance_data) if balance_data else 0.0
+                
+                if current_balance < bet_size:
+                    log_to_file(f"⚠️ BALANCE GUARD: Skipping trade. Need ${bet_size:.2f} USDC, but only have ${current_balance:.2f} USDC.")
+                    # Trigger an immediate redemption check to see if we can recover funds
+                    threading.Thread(target=redeem_all_winners, daemon=True).start()
+                    return # Status stays 'simulated' or we can set it to 'skipped'
+            except Exception as be:
+                log_to_file(f"⚠️ Balance Check failed: {be} (Proceeding with attempt)")
+
             # Record conditionId for future redemptions
             if market:
                 condition_id = market.get("conditionId")
             
-            # Using Native Market Order (No limit price required)
             log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
             
             # 1. Create the Market Order Args
@@ -606,6 +629,7 @@ def redeem_all_winners():
         
         redeemed_count = 0
         for t in winners:
+            log_to_file(f"🔍 Analyzing Win: {t.get('market_slug')}...")
             cid = t.get("condition_id") or get_market_condition_id(t.get("market_slug"))
             if not cid:
                 continue
@@ -653,6 +677,11 @@ def redeem_all_winners():
                 
                 nonce = safe_contract.functions.nonce().call()
                 
+                # Network-level Gas Pricing Optimization for Polygon
+                # Using 1.25x multiplier to avoid stuck transactions
+                current_gas_price = w3.eth.gas_price
+                optimized_gas_price = int(current_gas_price * 1.25)
+                
                 tx = safe_contract.functions.execTransaction(
                     w3.to_checksum_address(CTF_CONTRACT),
                     0,
@@ -665,8 +694,8 @@ def redeem_all_winners():
                 ).build_transaction({
                     'from': account.address,
                     'nonce': w3.eth.get_transaction_count(account.address),
-                    'gas': 300000,
-                    'gasPrice': w3.eth.gas_price
+                    'gas': 350000, # Slightly higher limit for CTF redemptions
+                    'gasPrice': optimized_gas_price
                 })
                 
                 signed_tx = w3.eth.account.sign_transaction(tx, pk)
