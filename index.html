@@ -930,6 +930,13 @@
             <button class="save-btn" onclick="saveStrategySettings()">SAVE STRATEGY</button>
         </div>
 
+        <!-- Settlement -->
+        <div class="card">
+            <div class="card-title">💰 LIQUIDITY & SETTLEMENT</div>
+            <div class="setting-hint" style="margin-bottom:12px;">Winning positions must be redeemed on-chain to recover USDC. The bot handles this every 10 mins, but you can trigger it manually here.</div>
+            <button class="save-btn" style="background:var(--green); color:black;" id="redeemBtn" onclick="triggerRedeem()">REDEEM ALL WINNINGS</button>
+        </div>
+
         <!-- Danger Zone -->
         <div class="card">
             <div class="card-title" style="color:var(--red);">⚠️ DANGER ZONE</div>
@@ -1419,6 +1426,24 @@
         function setupAutoRefresh(interval) {
             if (autoRefreshTimer) clearInterval(autoRefreshTimer);
             if (interval > 0) autoRefreshTimer = setInterval(fetchAll, interval);
+        }
+
+        async function triggerRedeem() {
+            const btn = document.getElementById('redeemBtn');
+            const originalText = btn.textContent;
+            try {
+                btn.textContent = 'Triggering Redemption...';
+                btn.disabled = true;
+                const resp = await fetch(VPS_URL + '/redeem', { method: 'POST' });
+                showToast('Redemption sequence started. Check logs.');
+            } catch (e) {
+                showToast('Redemption trigger failed.', 'error');
+            } finally {
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
         }
 
         // ── Startup ──────────────────────────────────

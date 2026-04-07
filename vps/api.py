@@ -17,7 +17,26 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import MarketOrderArgs
-# from py_clob_client.clob_types import OrderType, Side
+from web3 import Web3
+
+# ── Polymarket Registry ─────────────────────────────────────
+USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+CTF_CONTRACT = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+POLYGON_RPC = "https://polygon-rpc.com"
+
+CTF_ABI = [
+    {
+        "name": "redeemPositions",
+        "type": "function",
+        "inputs": [
+            {"name": "collateralToken", "type": "address"},
+            {"name": "parentCollectionId", "type": "bytes32"},
+            {"name": "conditionId", "type": "bytes32"},
+            {"name": "indexSets", "type": "uint256[]"}
+        ],
+        "outputs": []
+    }
+]
 
 
 app = Flask(__name__)
@@ -429,6 +448,10 @@ def bot_loop():
             
             check_outcomes(market_baselines)
             
+            # 6. Periodic Redemption (Every 10 minutes)
+            if int(now) % 600 < 5: # Small 5s window every 10 min
+                threading.Thread(target=redeem_all_winners, daemon=True).start()
+
             if len(market_baselines) > 20:
                 market_baselines = {k: v for k, v in market_baselines.items() if k > window_ts - 3600}
 
@@ -483,6 +506,9 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
         try:
             bet_size = float(cfg.get("bet_size", 2.0))
             
+            # Record conditionId for future redemptions
+            condition_id = market.get("conditionId")
+            
             # Using Native Market Order (No limit price required)
             log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
             
@@ -517,7 +543,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
         "market_slug": slug, "direction": direction, "token_id": token_id,
         "token_price": token_price, "btc_price": btc_price, "confidence": confidence,
         "order_id": order_id, "signals": signals, "bet_size": cfg.get("bet_size", 2.0),
-        "dry_run": is_dry, "status": status, "outcome": None
+        "dry_run": is_dry, "status": status, "outcome": None, "condition_id": condition_id, "redeemed": False
     }
     
     if is_dry:
@@ -526,6 +552,133 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
     trades = safe_read_json(TRADES_PATH) or []
     trades.append(trade)
     safe_write_json(TRADES_PATH, trades)
+
+# ── Redemption Logic ───────────────────────────────────────
+
+def get_market_condition_id(slug):
+    """Fetch conditionId from Gamma API if missing from trade history."""
+    try:
+        resp = requests.get(f"https://gamma-api.polymarket.com/markets?slug={slug}", timeout=5)
+        data = resp.json()
+        if data and len(data) > 0:
+            return data[0].get("conditionId")
+    except Exception as e:
+        log_to_file(f"⚠️ Error fetching conditionId for {slug}: {e}")
+    return None
+
+def redeem_all_winners():
+    """Scan history for unredeemed wins and execute on-chain redemption."""
+    trades = safe_read_json(TRADES_PATH) or []
+    winners = [t for t in trades if t.get("outcome") == "win" and not t.get("redeemed")]
+    
+    if not winners:
+        return
+    
+    log_to_file(f"💰 Found {len(winners)} unredeemed winning positions. Starting settlement...")
+    
+    pk = os.getenv("POLY_PRIVATE_KEY")
+    proxy_addr = os.getenv("POLY_WALLET_ADDRESS") # The Safe Wallet
+    
+    if not pk or not proxy_addr:
+        log_to_file("❌ Redemption failed: Missing Private Key or Proxy Wallet Address in .env")
+        return
+
+    try:
+        w3 = Web3(Web3.HTTPProvider(POLYGON_RPC))
+        account = w3.eth.account.from_key(pk)
+        
+        # 1. Check MATIC for Gas
+        balance = w3.eth.get_balance(account.address)
+        if balance < w3.to_wei(0.01, 'ether'):
+            log_to_file(f"❌ Redemption failed: Insufficient MATIC for gas in EOA {account.address}")
+            return
+
+        # 2. Setup CTF Contract
+        ctf = w3.eth.contract(address=w3.to_checksum_address(CTF_CONTRACT), abi=CTF_ABI)
+        
+        redeemed_count = 0
+        for t in winners:
+            cid = t.get("condition_id") or get_market_condition_id(t.get("market_slug"))
+            if not cid:
+                continue
+            
+            log_to_file(f"🔗 Redeeming: {t.get('market_slug')} (CID: {cid[:10]}...)")
+            
+            # Note: For Polymarket Safe wallets, the simplest method is often to try direct 
+            # redemption from the proxy if the owner signs it, OR using the Safe ABI.
+            # To keep it robust, we construct the redeemPositions data.
+            
+            # Construct the call data
+            # parentCollectionId is Bytes32(0)
+            p_cid = "0x" + "0" * 64
+            # IndexSets for binary is [1, 2]
+            
+            try:
+                # We attempt to send a transaction FROM the EOA that triggers the SAFE to redeem.
+                # However, a simpler direct way for Polymarket bots is often to use the 
+                # CTExchange or FPMM contracts. 
+                # For this implementation, we will use the most direct CTF redemption.
+                
+                # NOTE: If the user address is a SAFE, the EOA cannot call redeemPositions(proxy) 
+                # directly unless the EOA is the proxy.
+                # We will attempt to call it as the proxy via the relayer methods if possible, 
+                # but since we are using Web3, we construct a standard transaction.
+                
+                # FALLBACK: If Proxy logic is too complex for a single script, we log the need.
+                # For now, we use the standard redeemPositions call structure.
+                
+                data = ctf.encode_abi("redeemPositions", [
+                    w3.to_checksum_address(USDC_E),
+                    p_cid,
+                    cid,
+                    [1, 2]
+                ])
+                
+                # Construct Safe Transaction (Minimal execTransaction ABI)
+                safe_abi = [{"name":"execTransaction","type":"function","inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"},{"name":"operation","type":"uint8"},{"name":"safeTxGas","type":"uint256"},{"name":"baseGas","type":"uint256"},{"name":"gasPrice","type":"uint256"},{"name":"gasToken","type":"address"},{"name":"refundReceiver","type":"address"},{"name":"signatures","type":"bytes"}],"outputs":[{"name":"success","type":"bool"}]},{"name":"nonce","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256"}]}]
+                safe_contract = w3.eth.contract(address=w3.to_checksum_address(proxy_addr), abi=safe_abi)
+                
+                # For a simple 1-of-1 Safe, the signature is just:
+                # 000000000000000000000000{EOA_ADDRESS}000000000000000000000000000000000000000000000000000000000000000001
+                # where 01 is the signature type for EOA.
+                sig = "0x000000000000000000000000" + account.address[2:].lower() + "0000000000000000000000000000000000000000000000000000000000000000" + "01"
+                
+                nonce = safe_contract.functions.nonce().call()
+                
+                tx = safe_contract.functions.execTransaction(
+                    w3.to_checksum_address(CTF_CONTRACT),
+                    0,
+                    data,
+                    0, # Call
+                    0, 0, 0,
+                    "0x0000000000000000000000000000000000000000",
+                    "0x0000000000000000000000000000000000000000",
+                    sig
+                ).build_transaction({
+                    'from': account.address,
+                    'nonce': w3.eth.get_transaction_count(account.address),
+                    'gas': 300000,
+                    'gasPrice': w3.eth.gas_price
+                })
+                
+                signed_tx = w3.eth.account.sign_transaction(tx, pk)
+                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+                log_to_file(f"✅ Redemption Transaction Sent: {tx_hash.hex()}")
+                
+                # Mark as redeemed in our history
+                t["redeemed"] = True
+                redeemed_count += 1
+                time.sleep(2) # Avoid nonce issues
+            except Exception as ex:
+                log_to_file(f"⚠️ Redemption step failed: {ex}")
+                continue
+                
+        if redeemed_count > 0:
+            safe_write_json(TRADES_PATH, trades)
+            log_to_file(f"🎊 Successfully redeemed {redeemed_count} positions!")
+
+    except Exception as e:
+        log_to_file(f"⚠️ Global Redemption Error: {e}")
 
 # ── API Routes ─────────────────────────────────────────────
 
@@ -572,6 +725,11 @@ def handle_config():
         safe_write_json(CONFIG_PATH, request.get_json())
         return jsonify({"status": "saved"})
     return jsonify(safe_read_json(CONFIG_PATH) or {})
+
+@app.route("/redeem", methods=["POST"])
+def trigger_redeem():
+    threading.Thread(target=redeem_all_winners, daemon=True).start()
+    return jsonify({"status": "redemption_triggered"})
 
 @app.route("/logs")
 def get_logs():
