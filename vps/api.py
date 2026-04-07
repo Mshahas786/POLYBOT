@@ -444,7 +444,7 @@ def bot_loop():
                         elif not client and not cfg.get("dry_run", True):
                             pass
                         elif target_token_id:
-                            execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client)
+                            execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
             
             check_outcomes(market_baselines)
             
@@ -497,17 +497,19 @@ def check_outcomes(baselines):
             bot_running = False
             log_to_file(f"🛑 AUTO-STOP: Win rate dropped below 50% ({win_rate:.1f}%). Engine Paused.")
 
-def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, confidence, signals, cfg, client=None):
+def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, confidence, signals, cfg, client=None, market=None):
     is_dry = cfg.get("dry_run", True)
     status = "simulated"
     order_id = "N/A"
+    condition_id = market.get("conditionId") if market else None
 
     if not is_dry and client:
         try:
             bet_size = float(cfg.get("bet_size", 2.0))
             
             # Record conditionId for future redemptions
-            condition_id = market.get("conditionId")
+            if market:
+                condition_id = market.get("conditionId")
             
             # Using Native Market Order (No limit price required)
             log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
