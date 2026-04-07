@@ -213,8 +213,8 @@ def analyze_signals(price_to_beat):
     votes_up = 0
     votes_down = 0
     
-    if (current - price_to_beat) / price_to_beat * 100 > 0.05: votes_up += 1
-    elif (current - price_to_beat) / price_to_beat * 100 < -0.05: votes_down += 1
+    if (current - price_to_beat) / price_to_beat * 100 > 0.08: votes_up += 1
+    elif (current - price_to_beat) / price_to_beat * 100 < -0.08: votes_down += 1
     
     if trend == "UP": votes_up += 1
     else: votes_down += 1
@@ -222,15 +222,15 @@ def analyze_signals(price_to_beat):
     if ema_signal == "UP": votes_up += 2
     else: votes_down += 2
     
-    if rsi > 55: votes_up += 1
-    elif rsi < 45: votes_down += 1
+    if rsi > 60: votes_up += 1
+    elif rsi < 40: votes_down += 1
     
-    if vwap_signal == "UP": votes_up += 1
-    elif vwap_signal == "DOWN": votes_down += 1
+    if vwap_signal == "UP": votes_up += 2
+    elif vwap_signal == "DOWN": votes_down += 2
     
     total_votes = votes_up + votes_down
     direction = "UP" if votes_up > votes_down else "DOWN"
-    confidence = max(votes_up, votes_down) / 6 * 100
+    confidence = max(votes_up, votes_down) / 7 * 100
     
     signals = {
         "trend": trend, "rsi": round(rsi, 1), "ema": ema_signal, 
@@ -351,8 +351,8 @@ def bot_loop():
                             # Derive API Credentials
                             temp_client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137)
                             creds = temp_client.create_or_derive_api_creds()
-                        
-                        client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=0, funder=addr)
+                        # Use signature_type=1 (POLY_PROXY) because the funder is a Proxy wallet
+                        client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=1, funder=addr)
                 except Exception as e:
                     log_to_file(f"⚠️ Live Client Init Error: {e}")
 

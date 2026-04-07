@@ -1085,11 +1085,14 @@
                 const bal = document.getElementById('statBalance');
                 const pnl = document.getElementById('statPnl');
                 
-                if (bal) bal.textContent = '$' + (data.account.balance || '0.00').toLocaleString();
+                if (bal) {
+                    const balanceFloat = parseFloat(data.account.balance) || 0;
+                    bal.textContent = '$' + balanceFloat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
                 if (pnl) {
-                    const val = data.account.pnl || 0;
-                    pnl.textContent = (val >= 0 ? '+' : '') + '$' + val.toLocaleString();
-                    pnl.className = 'stat-value ' + (val > 0 ? 'green' : (val < 0 ? 'red' : ''));
+                    const pnlFloat = parseFloat(data.account.pnl) || 0;
+                    pnl.textContent = (pnlFloat >= 0 ? '+' : '') + '$' + pnlFloat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    pnl.className = 'stat-value ' + (pnlFloat > 0 ? 'green' : (pnlFloat < 0 ? 'red' : ''));
                 }
             }
 
