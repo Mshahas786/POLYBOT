@@ -907,7 +907,7 @@
 
             <div class="setting-group">
                 <label class="setting-label">MAX TRADES PER HOUR</label>
-                <input class="setting-input" id="maxTrades" type="number" value="5" min="1" max="30">
+                <input class="setting-input" id="maxTrades" type="number" value="12" min="1" max="30">
             </div>
 
             <div class="setting-group">
@@ -1333,7 +1333,7 @@
             const cfg = {
                 dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
                 bet_size: parseFloat(document.getElementById('betSize').value) || 2,
-                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 5,
+                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 12,
                 cooldown_seconds: parseInt(document.getElementById('cooldown').value) || 60,
                 momentum_threshold: parseFloat(document.getElementById('momThreshold').value) || 0.0003,
                 max_consecutive_losses: parseInt(document.getElementById('maxLosses').value) || 5,

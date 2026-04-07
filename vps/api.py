@@ -271,7 +271,20 @@ def get_price_to_beat(window_ts, condition_id=None):
         line = get_clob_market_line(condition_id)
         if line: return line
     
-    # 2. Historical Sync (Approx)
+    # 2. Binance 1m Open Price (Matches Chainlink oracle start timestamp very closely)
+    try:
+        resp = requests.get(
+            f"https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&startTime={window_ts * 1000}&limit=1",
+            timeout=5
+        )
+        data = resp.json()
+        if data and len(data) > 0:
+            return float(data[0][1]) # Index 1 is Open price
+    except Exception as e:
+        log_to_file(f"⚠️ Binance Baseline Sync Error: {e}")
+        pass
+
+    # 3. Historical Sync (CryptoCompare Fallback)
     try:
         resp = requests.get(
             f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={window_ts}",
@@ -279,7 +292,7 @@ def get_price_to_beat(window_ts, condition_id=None):
         )
         return float(resp.json()["Data"]["Data"][-1]["close"])
     except:
-        # 3. Last recorded price
+        # 4. Last recorded price
         with price_lock: return last_btc_price
 
 def get_current_5min_ts():
