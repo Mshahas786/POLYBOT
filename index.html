@@ -1070,11 +1070,11 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value green" id="statBalance">$0.00</div>
-                <div class="stat-label">CURRENT BALANCE</div>
+                <div class="stat-label">EST. PROFIT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="statPnl">$0.00</div>
-                <div class="stat-label">TOTAL P&L</div>
+                <div class="stat-value" id="statPnl">0.0x</div>
+                <div class="stat-label">RISK RATIO</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value green" id="statSuccess">--</div>
@@ -1327,15 +1327,24 @@
                 modeBanner.innerHTML = '💰 LIVE TRADING — Real orders are being placed';
             }
 
-            // Balance & P&L - Direct from API
-            const bal = parseFloat(data.account?.balance) || 0;
-            const pnl = parseFloat(data.account?.pnl) || 0;
-            document.getElementById('statBalance').textContent = '$' + bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            document.getElementById('statPnl').textContent = (pnl >= 0 ? '+' : '-') + '$' + Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            document.getElementById('statPnl').className = 'stat-value ' + (pnl > 0 ? 'green' : (pnl < 0 ? 'red' : ''));
+            // Calculate stats from trade results (API balance returns 0 locally)
+            const wins = data.wins || 0;
+            const losses = data.losses || 0;
+            const total = data.total_trades || 0;
+            const bSize = data.bet_size || 2;
+
+            // Est. profit: win = betSize * 0.9, loss = -betSize
+            const estProfit = (wins * bSize * 0.9) - (losses * bSize);
+            document.getElementById('statBalance').textContent = (estProfit >= 0 ? '+' : '-') + '$' + Math.abs(estProfit).toFixed(2);
+            document.getElementById('statBalance').className = 'stat-value ' + (estProfit >= 0 ? 'green' : 'red');
+
+            // Risk ratio: avg win / avg loss
+            const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
+            document.getElementById('statPnl').textContent = riskRatio + 'x';
+            document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
 
             document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-            document.getElementById('statTotal').textContent = data.total_trades || 0;
+            document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
 
             // BTC Price
             if (data.btc_price) {

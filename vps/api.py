@@ -442,47 +442,40 @@ def bot_loop():
                     "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
                 }
                 
-                # 5. Decision Window (10s-90s) - EARLY entry for fair pricing
-                # WHY EARLY? At 0-90s, prices are near 0.50/0.50 → win = +$2.00, loss = -$2.00
-                # LATE entry (150s+) means prices skewed to 0.70+ → win = +$0.70, loss = -$2.00
-                # With 66.7% win rate: late = -$2.40 net, early = +$8.00 net
-                if 10 <= window_offset <= 90:
+                # 5. Decision Window (150s-285s) — Enter when trend is established
+                # WHY LATE? At 150-285s (2.5-4.5 min), the market has moved
+                # and our signals confirm direction. Early entry (0-90s) is
+                # noisy — BTC price hasn't settled, signals are unreliable.
+                # The price we pay (~0.55-0.75) reflects actual probability.
+                if 150 <= window_offset <= 285:
 
-                    # CRITICAL: Price fairness check
-                    # Only trade when both sides are between 0.35-0.65
-                    # Skip if market already moved too far (no edge, terrible risk/reward)
-                    if up_price < 0.35 or up_price > 0.65:
-                        if window_offset % 30 == 0:  # Log every 30s to avoid spam
-                            log_to_file(f"⏭️ Price too skewed (UP: {up_price:.2f} / DOWN: {down_price:.2f}). Waiting for next window.")
-                        pass  # Skip this window, wait for next 5-min cycle
-                    else:
-                        # Filter trades in the last hour for limit
-                        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-                        recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
+                    # Filter trades in the last hour for limit
+                    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                    recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
 
-                        max_hour = cfg.get("max_trades_per_hour", 12)
+                    max_hour = cfg.get("max_trades_per_hour", 12)
 
-                        # Extract Token IDs
-                        tokens = market.get("tokens", [])
-                        clob_ids = market.get("clobTokenIds", "[]")
-                        if isinstance(clob_ids, str):
-                            try: clob_ids = json.loads(clob_ids)
-                            except: clob_ids = []
+                    # Extract Token IDs
+                    tokens = market.get("tokens", [])
+                    clob_ids = market.get("clobTokenIds", "[]")
+                    if isinstance(clob_ids, str):
+                        try: clob_ids = json.loads(clob_ids)
+                        except: clob_ids = []
 
-                        up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
-                        down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
+                    up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
+                    down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
 
-                        target_token_id = up_token_id if direction == "UP" else down_token_id
-                        target_price = up_price if direction == "UP" else down_price
+                    target_token_id = up_token_id if direction == "UP" else down_token_id
+                    target_price = up_price if direction == "UP" else down_price
 
-                        min_conf = cfg.get("min_confidence", 60)
-                        if direction and confidence >= min_conf:
-                            if len(recent_trades) >= max_hour:
-                                pass
-                            elif not client and not cfg.get("dry_run", True):
-                                pass
-                            elif target_token_id:
-                                execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
+                    min_conf = cfg.get("min_confidence", 60)
+                    if direction and confidence >= min_conf:
+                        if len(recent_trades) >= max_hour:
+                            pass
+                        elif not client and not cfg.get("dry_run", True):
+                            pass
+                        elif target_token_id:
+                            execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
             
             check_outcomes(market_baselines)
             
