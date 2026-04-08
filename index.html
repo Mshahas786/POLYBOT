@@ -545,6 +545,12 @@
             color: var(--blue);
         }
 
+        .trade-status.failed {
+            background: rgba(255, 62, 78, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(255, 62, 78, 0.3);
+        }
+
         .refresh-btn {
             width: 100%;
             padding: 12px;
@@ -1324,6 +1330,8 @@
             const isWin = outcome === 'win';
             const isLoss = outcome === 'loss';
             const isPending = outcome === null;
+            const isFailed = trade.status === 'failed';
+            const retryCount = trade.retry_attempt || 0;
 
             // Calculate profit/loss
             let profitHtml = '';
@@ -1331,13 +1339,15 @@
                 profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Profit:</span><span class="trade-detail-value profit">+$${(betSize * 0.9).toFixed(2)}</span></div>`;
             } else if (isLoss) {
                 profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Loss:</span><span class="trade-detail-value loss">-$${betSize.toFixed(2)}</span></div>`;
+            } else if (isFailed) {
+                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value loss">Failed${retryCount > 0 ? ` (${retryCount} retries)` : ''}</span></div>`;
             } else {
                 profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value">Pending...</span></div>`;
             }
 
             const cardClass = isWin ? 'win' : (isLoss ? 'loss' : '');
-            const statusClass = isWin ? 'win' : (isLoss ? 'loss' : (isPending ? 'pending' : 'simulated'));
-            const statusLabel = isWin ? '✅ WIN' : (isLoss ? '❌ LOSS' : (isPending ? '⏳ PENDING' : '🧪 SIMULATED'));
+            const statusClass = isWin ? 'win' : (isLoss ? 'loss' : (isFailed ? 'failed' : (isPending ? 'pending' : 'simulated')));
+            const statusLabel = isWin ? '✅ WIN' : (isLoss ? '❌ LOSS' : (isFailed ? '❌ FAILED' : (isPending ? '⏳ PENDING' : '🧪 SIMULATED')));
 
             const slug = trade.market_slug || '';
             const link = slug ? `https://polymarket.com/event/${slug.replace(/\s+/g, '-').toLowerCase()}` : '#';
