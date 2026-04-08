@@ -762,12 +762,12 @@ def bot_loop():
                 # RESEARCH: ~15-20% of periods resolve in final 30-60 seconds
                 
                 entry_triggered = False
-                
+
                 # Phase 1: Early entry (strong signals only)
                 if 60 <= window_offset <= 180 and confidence >= 75:
                     current_strategy_info["status"] = "PHASE 1: Early Entry Window"
                     entry_triggered = True
-                
+
                 # Phase 2: Late entry (standard confidence)
                 elif 180 <= window_offset <= 285 and confidence >= 65:
                     current_strategy_info["status"] = "PHASE 2: Late Entry Window"
@@ -794,7 +794,7 @@ def bot_loop():
                     target_price = up_price if direction == "UP" else down_price
 
                     min_conf = cfg.get("min_confidence", 65)
-                    
+
                     if direction and confidence >= min_conf:
                         if len(recent_trades) >= max_hour:
                             current_strategy_info["status"] = f"HOURLY LIMIT REACHED ({len(recent_trades)}/{max_hour})"
@@ -803,6 +803,29 @@ def bot_loop():
                         elif target_token_id:
                             execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
                             entry_triggered = False
+                
+                # Check for failed trades from previous windows to retry
+                elif client and not cfg.get("dry_run", True):
+                    failed_trades = [t for t in trades if t.get("status") == "failed" and t.get("window_ts", 0) >= window_ts - 600]
+                    if failed_trades and confidence >= 70:
+                        last_failed = failed_trades[-1]
+                        log_to_file(f"🔄 Retrying failed trade: {last_failed.get('direction')} from window {last_failed.get('window_ts')}")
+                        execute_trade(
+                            last_failed.get("direction"),
+                            last_failed.get("token_id"),
+                            last_failed.get("token_price", 0.50),
+                            price_now,
+                            last_failed.get("market_slug", slug),
+                            window_ts,
+                            confidence,
+                            signals,
+                            cfg,
+                            client,
+                            market
+                        )
+                        # Mark retry attempt
+                        last_failed["retry_attempt"] = last_failed.get("retry_attempt", 0) + 1
+                        safe_write_json(TRADES_PATH, trades)
 
             check_outcomes(market_baselines)
 
@@ -905,70 +928,34 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             if market:
                 condition_id = market.get("conditionId")
 
-            log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size}, Token Price: ${token_price})")
+            log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
 
-            # SMART ORDER STRATEGY: Try multiple approaches for better fill rate
-            # 
-            # Strategy 1: Aggressive FAK with realistic price (token_price + spread)
-            # Strategy 2: GTC Limit Order at fair value
-            # Strategy 3: Market order with max price (fallback)
+            # Simple FOK execution - single attempt
+            capped_price = 0.70
             
-            from py_clob_client.clob_types import OrderArgs
-            import time as time_module
-            
-            # Calculate smart price based on current token price
-            # Add small spread to increase fill probability
-            spread = 0.02  # 2 cent spread
-            aggressive_price = min(token_price + spread, 0.95)  # Cap at 0.95 (realistic max)
-            
-            order_filled = False
-            max_retries = 2
-            
-            for attempt in range(max_retries):
-                try:
-                    if attempt == 0:
-                        # Attempt 1: FAK with aggressive but realistic price
-                        log_to_file(f"📊 Attempt 1/2: FAK order @ ${aggressive_price:.3f}")
-                        order_args = MarketOrderArgs(
-                            token_id=token_id,
-                            amount=bet_size,
-                            side="BUY",
-                            price=aggressive_price
-                        )
-                        signed_order = client.create_market_order(order_args)
-                        resp = client.post_order(signed_order, OrderType.FAK)
-                        
-                    elif attempt == 1:
-                        # Attempt 2: GTC Limit Order at fair value (will sit on book)
-                        log_to_file(f"📊 Attempt 2/2: GTC Limit Order @ ${token_price:.3f}")
-                        order_args = OrderArgs(
-                            token_id=token_id,
-                            price=token_price,
-                            size=bet_size,
-                            side="BUY"
-                        )
-                        signed_order = client.create_order(order_args)
-                        resp = client.post_order(signed_order, OrderType.GTC)
-                    
-                    # Check if successful
-                    if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
-                        order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
-                        status = "placed"
-                        order_type = "FAK" if attempt == 0 else "GTC"
-                        log_to_file(f"✅ LIVE {order_type} ORDER SUCCESS: {direction} | OrderID: {order_id} | Price: ${aggressive_price if attempt == 0 else token_price:.3f}")
-                        order_filled = True
-                        break
-                    else:
-                        log_to_file(f"⚠️ Attempt {attempt + 1} failed: {resp}")
-                        time_module.sleep(0.5)  # Brief pause before retry
-                        
-                except Exception as attempt_err:
-                    log_to_file(f"⚠️ Attempt {attempt + 1} error: {attempt_err}")
-                    time_module.sleep(0.5)
-            
-            if not order_filled:
+            try:
+                log_to_file(f"📊 FOK order @ ${capped_price:.2f}")
+                
+                order_args = MarketOrderArgs(
+                    token_id=token_id,
+                    amount=bet_size,
+                    side="BUY",
+                    price=capped_price
+                )
+                signed_order = client.create_market_order(order_args)
+                resp = client.post_order(signed_order, OrderType.FOK)
+                
+                if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
+                    order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
+                    status = "placed"
+                    log_to_file(f"✅ LIVE FOK ORDER SUCCESS: {direction} | OrderID: {order_id}")
+                else:
+                    status = "failed"
+                    log_to_file(f"⚠️ FOK order failed, will retry on next strong signal")
+                
+            except Exception as e:
                 status = "failed"
-                log_to_file(f"❌ ALL ORDER ATTEMPTS FAILED for {direction} trade")
+                log_to_file(f"⚠️ FOK order failed: {e} - will retry on next strong signal")
                 
         except Exception as e:
             status = "error"
