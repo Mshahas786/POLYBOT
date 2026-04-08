@@ -972,6 +972,34 @@
             </div>
         </div>
 
+        <!-- 5-Minute Market Window -->
+        <div class="card" id="windowCard" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div
+                        style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:0.1em; margin-bottom:4px;">
+                        CURRENT 5-MIN WINDOW</div>
+                    <div style="font-size:28px; font-family:'JetBrains Mono',monospace; font-weight:700;"
+                        id="windowTimer">--:--</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;">MARKET ODDS
+                    </div>
+                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;">
+                        <span style="color:var(--green);" id="windowUp">--</span>
+                        &nbsp;/&nbsp;
+                        <span style="color:var(--red);" id="windowDown">--</span>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;">STATUS
+                    </div>
+                    <div style="font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:600;"
+                        id="windowStatus">--</div>
+                </div>
+            </div>
+        </div>
+
         <button class="refresh-btn" onclick="fetchAll()">⟳ REFRESH</button>
 
         <!-- Trade History -->
@@ -1187,6 +1215,9 @@
             document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
             document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
 
+            // Update 5-min window display
+            updateWindowTimer(data.info);
+
             // BTC Price
             if (data.btc_price) {
                 document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1201,6 +1232,45 @@
             toggle.className = data.dry_run ? 'toggle on' : 'toggle';
             document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
             if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
+        }
+
+        function updateWindowTimer(info) {
+            const card = document.getElementById('windowCard');
+            if (!info || info.time_remaining === undefined) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+
+            const secs = info.time_remaining;
+            const min = Math.floor(secs / 60);
+            const sec = secs % 60;
+            const timer = document.getElementById('windowTimer');
+            timer.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+
+            // Color based on time remaining
+            if (secs <= 30) timer.style.color = 'var(--red)';
+            else if (secs <= 120) timer.style.color = 'var(--accent)';
+            else timer.style.color = 'var(--green)';
+
+            // Market odds
+            const upPct = Math.round((info.up_price || 0) * 100);
+            const downPct = Math.round((info.down_price || 0) * 100);
+            document.getElementById('windowUp').textContent = `UP ${upPct}%`;
+            document.getElementById('windowDown').textContent = `DOWN ${downPct}%`;
+
+            // Status based on entry window (150-285s is when bot trades)
+            const statusEl = document.getElementById('windowStatus');
+            if (secs > 285) {
+                statusEl.textContent = '⏳ WAITING';
+                statusEl.style.color = 'var(--muted)';
+            } else if (secs >= 150) {
+                statusEl.textContent = '🎯 ENTRY ZONE';
+                statusEl.style.color = 'var(--green)';
+            } else {
+                statusEl.textContent = '⏹ CLOSED';
+                statusEl.style.color = 'var(--red)';
+            }
         }
 
         async function fetchBtcPrice() {
