@@ -1080,26 +1080,33 @@
             <div class="sep"></div>
             <div class="setting-group">
                 <label class="setting-label">BET SIZE (USDC)</label>
-                <input class="setting-input" id="betSize" type="number" value="2" min="0.1" step="0.5">
-                <div class="setting-hint">Amount per trade in USDC</div>
+                <input class="setting-input" id="betSize" type="number" value="1" min="0.1" step="0.5">
+                <div class="setting-hint">Amount per trade in USDC (Polymarket minimum applies)</div>
             </div>
             <div class="setting-group">
                 <label class="setting-label">MAX TRADES PER HOUR</label>
                 <input class="setting-input" id="maxTrades" type="number" value="12" min="1" max="30">
             </div>
             <div class="setting-group">
-                <label class="setting-label">COOLDOWN (SECONDS)</label>
-                <input class="setting-input" id="cooldown" type="number" value="60" min="10" max="600">
-            </div>
-            <div class="setting-group">
                 <label class="setting-label">MIN CONFIDENCE %</label>
-                <input class="setting-input" id="minConfidence" type="number" value="60" min="10" max="100">
-                <div class="setting-hint">Higher = fewer but stronger signals. Recommended: 80+</div>
+                <input class="setting-input" id="minConfidence" type="number" value="75" min="10" max="100">
+                <div class="setting-hint">Minimum signal confidence to trade. Higher = fewer but stronger trades.
+                    Recommended: 70-80%</div>
             </div>
             <div class="setting-group">
-                <label class="setting-label">MAX CONSECUTIVE LOSSES</label>
-                <input class="setting-input" id="maxLosses" type="number" value="5" min="1" max="20">
-                <div class="setting-hint">Auto-pause after this many losses in a row</div>
+                <label class="setting-label">ORDER EXECUTION</label>
+                <div class="setting-hint" style="margin-bottom:8px;">Type: FOK (Fill-Or-Kill) with $0.70 cap</div>
+                <div class="setting-hint" style="margin-bottom:8px;">Failed trades auto-retry on next strong signal
+                    (70%+ confidence)</div>
+                <div class="setting-hint" style="margin-bottom:8px;">Single attempt per signal, waits for next
+                    opportunity if fails</div>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">ENTRY TIMING</label>
+                <div class="setting-hint" style="margin-bottom:8px;">Phase 1: 60-180s (requires 75%+ confidence)</div>
+                <div class="setting-hint" style="margin-bottom:8px;">Phase 2: 180-285s (requires 65%+ confidence)</div>
+                <div class="setting-hint" style="margin-bottom:8px;">Failed trades retry on any 70%+ signal outside
+                    windows</div>
             </div>
             <button class="save-btn" onclick="saveStrategySettings()">SAVE STRATEGY</button>
         </div>
@@ -1124,9 +1131,12 @@
             <div class="card-title">ABOUT</div>
             <div
                 style="font-size: 11px; color: var(--muted); line-height: 2; font-family: 'JetBrains Mono', monospace;">
-                <div>Bot: PolyBot v3.1</div>
-                <div>Strategy: Multi-Signal (RSI+EMA+VWAP)</div>
+                <div>Bot: PolyBot v4.0</div>
+                <div>Strategy: Multi-Signal (SMA+RSI+MACD+BB+Momentum+VWAP+LastSec)</div>
+                <div>Order Type: FOK (Fill-Or-Kill) @ $0.70 cap</div>
                 <div>Market: BTC Up/Down 5-Min</div>
+                <div>Entry: Phase 1 (60-180s @75%+), Phase 2 (180-285s @65%+)</div>
+                <div>Retry: Failed trades retry on next 70%+ signal</div>
             </div>
         </div>
     </div>
@@ -1407,11 +1417,9 @@
         async function saveStrategySettings() {
             const cfg = {
                 dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
-                bet_size: parseFloat(document.getElementById('betSize').value) || 2,
+                bet_size: parseFloat(document.getElementById('betSize').value) || 1,
                 max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 12,
-                cooldown_seconds: parseInt(document.getElementById('cooldown').value) || 60,
-                min_confidence: parseInt(document.getElementById('minConfidence').value) || 80,
-                max_consecutive_losses: parseInt(document.getElementById('maxLosses').value) || 5,
+                min_confidence: parseInt(document.getElementById('minConfidence').value) || 75,
             };
             try {
                 await fetch(VPS_URL + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
