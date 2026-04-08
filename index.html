@@ -737,96 +737,6 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* ── Analysis Cards ───────────────────────── */
-        .analysis-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .analysis-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 10px;
-        }
-
-        .analysis-label {
-            font-size: 9px;
-            color: var(--muted);
-            font-family: 'JetBrains Mono', monospace;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-        }
-
-        .analysis-value {
-            font-size: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
-        }
-
-        .analysis-value.green {
-            color: var(--green);
-        }
-
-        .analysis-value.red {
-            color: var(--red);
-        }
-
-        .analysis-value.accent {
-            color: var(--accent);
-        }
-
-        /* ── Strategy Overlay ──────────────────────── */
-        .strategy-overlay {
-            display: flex;
-            justify-content: space-around;
-            gap: 15px;
-            padding: 18px;
-            background: rgba(20, 20, 20, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--accent-dim);
-            border-radius: 16px;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .strategy-overlay .stat-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-        }
-
-        .strategy-overlay .label {
-            font-size: 10px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }
-
-        .strategy-overlay .value {
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text);
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .strategy-overlay .value.up {
-            color: var(--green);
-            text-shadow: 0 0 10px rgba(46, 213, 115, 0.3);
-        }
-
-        .strategy-overlay .value.down {
-            color: var(--red);
-            text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);
-        }
-
         /* ── Log Entries ───────────────────────────── */
         .log-entry {
             display: flex;
@@ -862,30 +772,6 @@
 
         .log-msg.success {
             color: var(--green);
-        }
-
-        /* ── P&L Chart ─────────────────────────── */
-        .pnl-chart {
-            display: flex;
-            align-items: flex-end;
-            gap: 3px;
-            height: 80px;
-            padding: 8px 0;
-        }
-
-        .pnl-bar {
-            flex: 1;
-            border-radius: 3px 3px 0 0;
-            min-height: 2px;
-            transition: height 0.3s ease;
-        }
-
-        .pnl-bar.up {
-            background: var(--green);
-        }
-
-        .pnl-bar.down {
-            background: var(--red);
         }
 
         /* ── Loading ───────────────────────────────── */
@@ -1088,52 +974,7 @@
 
         <button class="refresh-btn" onclick="fetchAll()">⟳ REFRESH</button>
 
-        <!-- Strategy Overlay -->
-        <div id="strategyOverlayContainer"></div>
-
-        <!-- Trade Analysis -->
-        <div class="card">
-            <div class="card-title">📊 TRADE ANALYSIS</div>
-            <div class="analysis-grid" id="analysisGrid">
-                <div class="analysis-card">
-                    <div class="analysis-label">BEST TRADE</div>
-                    <div class="analysis-value green" id="bestTrade">--</div>
-                </div>
-                <div class="analysis-card">
-                    <div class="analysis-label">WORST TRADE</div>
-                    <div class="analysis-value red" id="worstTrade">--</div>
-                </div>
-                <div class="analysis-card">
-                    <div class="analysis-label">AVG WIN</div>
-                    <div class="analysis-value green" id="avgWin">--</div>
-                </div>
-                <div class="analysis-card">
-                    <div class="analysis-label">AVG LOSS</div>
-                    <div class="analysis-value red" id="avgLoss">--</div>
-                </div>
-                <div class="analysis-card">
-                    <div class="analysis-label">WIN STREAK</div>
-                    <div class="analysis-value accent" id="winStreak">--</div>
-                </div>
-                <div class="analysis-card">
-                    <div class="analysis-label">LOSS STREAK</div>
-                    <div class="analysis-value red" id="lossStreak">--</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Performance Chart -->
-        <div class="card">
-            <div class="card-title">📈 PERFORMANCE CHART</div>
-            <div class="pnl-chart" id="pnlChart"></div>
-            <div
-                style="display:flex; justify-content:space-between; font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-top:4px;">
-                <span id="chartUpCount">WINS: --</span>
-                <span id="chartDownCount">LOSSES: --</span>
-            </div>
-        </div>
-
-        <!-- Trade History with Details -->
+        <!-- Trade History -->
         <div class="card" style="margin-bottom: 80px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div class="card-title" style="margin-bottom:0;">📋 TRADE HISTORY</div>
@@ -1355,34 +1196,11 @@
             document.getElementById('btnStart').disabled = data.running;
             document.getElementById('btnStop').disabled = !data.running;
 
-            // Strategy Overlay
-            updateStrategyOverlay(data.info);
-
             // Update settings
             const toggle = document.getElementById('toggleDryRun');
             toggle.className = data.dry_run ? 'toggle on' : 'toggle';
             document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
             if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
-        }
-
-        function updateStrategyOverlay(info) {
-            const container = document.getElementById('strategyOverlayContainer');
-            if (!info || info.slug === "N/A" || !info.slug) {
-                container.innerHTML = '';
-                return;
-            }
-            if (info.status && info.status.includes("SCANNING")) {
-                container.innerHTML = `<div class="strategy-overlay"><div style="flex:1; text-align:center; color:var(--muted); font-size:12px; font-family:'JetBrains Mono',monospace;">🔍 ${info.status}</div></div>`;
-                return;
-            }
-            const diffColor = info.current_diff > 0.3 ? 'up' : (info.current_diff < -0.3 ? 'down' : '');
-            container.innerHTML = `
-                <div class="strategy-overlay">
-                    <div class="stat-group"><span class="label">🎯 Target</span><span class="value">$${parseFloat(info.price_to_beat || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></div>
-                    <div class="stat-group"><span class="label">📊 Diff</span><span class="value ${diffColor}">${info.current_diff}%</span></div>
-                    <div class="stat-group"><span class="label">🎲 Odds (U/D)</span><span class="value">${Math.round((info.up_price || 0) * 100)} / ${Math.round((info.down_price || 0) * 100)}</span></div>
-                    <div class="stat-group"><span class="label">⏳ Time</span><span class="value ${info.time_remaining < 60 ? 'warning' : ''}">${info.time_remaining}s</span></div>
-                </div>`;
         }
 
         async function fetchBtcPrice() {
@@ -1412,9 +1230,6 @@
                 const historyDiv = document.getElementById('tradeHistory');
                 historyDiv.innerHTML = trades.length ? trades.map(renderTradeCard).join('') :
                     '<div style="color:var(--muted); font-family:JetBrains Mono,monospace; font-size:11px; padding:10px;">No trades yet</div>';
-
-                renderPnlChart(data.history || []);
-                updateTradeAnalysis(data.history || []);
 
                 // Update signal badge
                 if (trades.length > 0) {
@@ -1478,49 +1293,6 @@
                     </div>
                 </div>
             </div>`;
-        }
-
-        function updateTradeAnalysis(trades) {
-            const resolved = trades.filter(t => t.outcome);
-            const wins = resolved.filter(t => t.outcome === 'win');
-            const losses = resolved.filter(t => t.outcome === 'loss');
-            const betSize = trades.length > 0 ? (trades[0].bet_size || 2) : 2;
-
-            // Best/Worst trade
-            const bestTrade = wins.length > 0 ? `+$${(betSize * 0.9).toFixed(2)}` : '--';
-            const worstTrade = losses.length > 0 ? `-$${betSize.toFixed(2)}` : '--';
-            document.getElementById('bestTrade').textContent = bestTrade;
-            document.getElementById('worstTrade').textContent = worstTrade;
-
-            // Avg Win / Avg Loss
-            document.getElementById('avgWin').textContent = wins.length > 0 ? `+$${(betSize * 0.9).toFixed(2)}` : '--';
-            document.getElementById('avgLoss').textContent = losses.length > 0 ? `-$${betSize.toFixed(2)}` : '--';
-
-            // Win/Loss streak
-            let maxWinStreak = 0, maxLossStreak = 0, curWin = 0, curLoss = 0;
-            for (const t of resolved) {
-                if (t.outcome === 'win') { curWin++; curLoss = 0; maxWinStreak = Math.max(maxWinStreak, curWin); }
-                else { curLoss++; curWin = 0; maxLossStreak = Math.max(maxLossStreak, curLoss); }
-            }
-            document.getElementById('winStreak').textContent = maxWinStreak > 0 ? maxWinStreak : '--';
-            document.getElementById('lossStreak').textContent = maxLossStreak > 0 ? maxLossStreak : '--';
-        }
-
-        function renderPnlChart(trades) {
-            const chart = document.getElementById('pnlChart');
-            const last30 = trades.slice(-30);
-            let upCount = 0, downCount = 0;
-            chart.innerHTML = last30.map(t => {
-                const isWin = t.outcome === 'win';
-                const isLoss = t.outcome === 'loss';
-                const dir = isWin ? 'up' : (isLoss ? 'down' : 'up');
-                if (isWin) upCount++; else if (isLoss) downCount++;
-                const h = Math.max(10, (t.confidence || 50) * 0.8);
-                const opacity = (isWin || isLoss) ? '1' : '0.3';
-                return `<div class="pnl-bar ${dir}" style="height:${h}%; opacity:${opacity}" title="${t.direction} ${t.confidence || 0}%"></div>`;
-            }).join('');
-            document.getElementById('chartUpCount').textContent = `WINS: ${upCount}`;
-            document.getElementById('chartDownCount').textContent = `LOSS: ${downCount}`;
         }
 
         async function fetchLogs() {
