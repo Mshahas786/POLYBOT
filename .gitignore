@@ -1,23 +1,49 @@
-# Node
-node_modules/
-dist/
-.idea/
-.vscode/
+# ============================================================
+# PolyBot - Git Ignore Rules
+# ============================================================
 
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
-
-# Secrets & Config (DO NOT PUSH)
+# ── Secrets & Credentials ─────────────────────────────────
 .env
-config.json
-trades.json
-bot.log
-bot.err
-vps/deploy.zip
+*.key
+*.pem
+*.secret
 
-# System
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual Environments ──────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDE & Editor ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS Files ──────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ── Runtime Data (don't commit bot state) ──────────────────
+config/
+*.log
+*.pid
+cloudflared.exe
+cloudflared.log
+cloudflared.out
+
+# ── AI/Assistant Tools ────────────────────────────────────
+.qwen/
+.agents/

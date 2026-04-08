@@ -16,16 +16,38 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import MarketOrderArgs
+from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
 from web3 import Web3
+from eth_abi import encode
 
-# RPC Configuration (Prioritize .env, then LlamaRPC, then official)
-POLYGON_RPC = os.getenv("POLYGON_RPC", "https://polygon.llamarpc.com") 
+# Use poly_web3 for redemption (the official working SDK)
+try:
+    from poly_web3 import PolyWeb3Service, WalletType
+    from poly_web3 import RedeemResult, RedeemErrorItem
+    RELAYER_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    PolyWeb3Service = None
+    WalletType = None
+    RELAYER_AVAILABLE = False
+
+# RPC Configuration (Prioritize .env, then reliable public RPCs)
+# Using multiple reliable Polygon RPC endpoints
+POLYGON_RPC = os.getenv("POLYGON_RPC", "https://polygon-rpc.com")
 FALLBACK_RPCS = [
     "https://1rpc.io/matic",
-    "https://polygon-rpc.com",
-    "https://poly-rpc.gateway.pokt.network"
+    "https://rpc.ankr.com/polygon",
+    "https://polygon-mainnet.public.blastapi.io",
+    "https://polygon.drpc.org"
 ]
+
+# Relayer Configuration
+RELAYER_URL = "https://relayer-v2.polymarket.com"
+CHAIN_ID = 137  # Polygon Mainnet
+
+# Signature types
+SIGNATURE_TYPE_EOA = 0  # Direct EOA wallet
+SIGNATURE_TYPE_POLY_PROXY = 1  # Polymarket proxy wallet (email accounts)
+SIGNATURE_TYPE_GNOSIS_SAFE = 2  # Gnosis Safe wallet (browser wallets)
 
 CTF_ABI = [
     {
@@ -70,7 +92,7 @@ current_strategy_info = {
     "edge": "None", "status": "Inactive", "confidence": 0,
     "signals": {}
 }
-last_redeem_time = 0
+last_redeem_time = time.time()  # Initialize to current time to trigger first redemption after 10 min
 
 # ── Binance WebSocket ──────────────────────────────────────
 class BinanceWS:
@@ -420,36 +442,47 @@ def bot_loop():
                     "edge": "None", "status": "Targeting", "confidence": confidence, "signals": signals
                 }
                 
-                # 5. Decision Window (150s-285s) - Active in the latter half of the window
-                if 150 <= window_offset <= 285:
-                    
-                    # Filter trades in the last hour for limit
-                    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-                    recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
-                    
-                    max_hour = cfg.get("max_trades_per_hour", 12)
-                
-                    # Extract Token IDs
-                    tokens = market.get("tokens", [])
-                    clob_ids = market.get("clobTokenIds", "[]") # Some markets use this as a string
-                    if isinstance(clob_ids, str):
-                        try: clob_ids = json.loads(clob_ids)
-                        except: clob_ids = []
-                    
-                    up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
-                    down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
-                    
-                    target_token_id = up_token_id if direction == "UP" else down_token_id
-                    target_price = up_price if direction == "UP" else down_price
-    
-                    min_conf = cfg.get("min_confidence", 60)
-                    if direction and confidence >= min_conf: 
-                        if len(recent_trades) >= max_hour:
-                            pass
-                        elif not client and not cfg.get("dry_run", True):
-                            pass
-                        elif target_token_id:
-                            execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
+                # 5. Decision Window (10s-90s) - EARLY entry for fair pricing
+                # WHY EARLY? At 0-90s, prices are near 0.50/0.50 → win = +$2.00, loss = -$2.00
+                # LATE entry (150s+) means prices skewed to 0.70+ → win = +$0.70, loss = -$2.00
+                # With 66.7% win rate: late = -$2.40 net, early = +$8.00 net
+                if 10 <= window_offset <= 90:
+
+                    # CRITICAL: Price fairness check
+                    # Only trade when both sides are between 0.35-0.65
+                    # Skip if market already moved too far (no edge, terrible risk/reward)
+                    if up_price < 0.35 or up_price > 0.65:
+                        if window_offset % 30 == 0:  # Log every 30s to avoid spam
+                            log_to_file(f"⏭️ Price too skewed (UP: {up_price:.2f} / DOWN: {down_price:.2f}). Waiting for next window.")
+                        pass  # Skip this window, wait for next 5-min cycle
+                    else:
+                        # Filter trades in the last hour for limit
+                        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                        recent_trades = [t for t in trades if t["timestamp"] > one_hour_ago]
+
+                        max_hour = cfg.get("max_trades_per_hour", 12)
+
+                        # Extract Token IDs
+                        tokens = market.get("tokens", [])
+                        clob_ids = market.get("clobTokenIds", "[]")
+                        if isinstance(clob_ids, str):
+                            try: clob_ids = json.loads(clob_ids)
+                            except: clob_ids = []
+
+                        up_token_id = clob_ids[0] if len(clob_ids) > 0 else (tokens[0].get("tokenId") if len(tokens) > 0 else None)
+                        down_token_id = clob_ids[1] if len(clob_ids) > 1 else (tokens[1].get("tokenId") if len(tokens) > 1 else None)
+
+                        target_token_id = up_token_id if direction == "UP" else down_token_id
+                        target_price = up_price if direction == "UP" else down_price
+
+                        min_conf = cfg.get("min_confidence", 60)
+                        if direction and confidence >= min_conf:
+                            if len(recent_trades) >= max_hour:
+                                pass
+                            elif not client and not cfg.get("dry_run", True):
+                                pass
+                            elif target_token_id:
+                                execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
             
             check_outcomes(market_baselines)
             
@@ -522,10 +555,14 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             try:
                 # Get fresh balance from CLOB
                 # With signature_type=1 and funder=proxy_wallet, this checks the Safe Proxy balance
-                from py_clob_client.clob_types import BalanceAllowanceParams
-                balance_data = client.get_balance()
-                current_balance = float(balance_data) if balance_data else 0.0
-                
+                params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
+                balance_data = client.get_balance_allowance(params)
+                # balance_data is a dict with 'balance' key in USDC decimals (6 decimals)
+                if isinstance(balance_data, dict):
+                    current_balance = float(balance_data.get("balance", 0)) / 1e6
+                else:
+                    current_balance = float(balance_data) / 1e6 if balance_data else 0.0
+
                 if current_balance < bet_size:
                     log_to_file(f"⚠️ BALANCE GUARD: Skipping trade. Need ${bet_size:.2f} USDC, but only have ${current_balance:.2f} USDC.")
                     # Trigger an immediate redemption check to see if we can recover funds
@@ -553,8 +590,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
             # 2. Create and Post in one go if supported, or use the two-step process
             # For market orders, create_market_order is the standard helper
             signed_order = client.create_market_order(order_args)
-            
-            from py_clob_client.clob_types import OrderType
+
             resp = client.post_order(signed_order, OrderType.FAK)
             
             if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
@@ -601,124 +637,259 @@ def get_market_condition_id(slug):
     return None
 
 def redeem_all_winners():
-    """Scan history for unredeemed wins and execute on-chain redemption."""
-    trades = safe_read_json(TRADES_PATH) or []
-    winners = [t for t in trades if t.get("outcome") == "win" and not t.get("redeemed")]
-    
-    if not winners:
-        return
-    
-    log_to_file(f"💰 Found {len(winners)} unredeemed winning positions. Starting settlement...")
-    
+    """Scan for unredeemed winning positions and execute on-chain redemption via Polymarket Relayer."""
+    global last_redeem_time
+
+    log_to_file("💰 [AUTO-REDEEM] Starting redemption scan...")
+
+    load_dotenv(ENV_PATH)
     pk = os.getenv("POLY_PRIVATE_KEY")
-    proxy_addr = os.getenv("POLY_WALLET_ADDRESS") # The Safe Wallet
-    
+    proxy_addr = os.getenv("POLY_WALLET_ADDRESS")
+
     if not pk or not proxy_addr:
-        log_to_file("❌ Redemption failed: Missing Private Key or Proxy Wallet Address in .env")
+        log_to_file("❌ Redemption failed: Missing Private Key or Wallet Address in .env")
+        last_redeem_time = time.time()
         return
 
     try:
-        w3 = Web3(Web3.HTTPProvider(POLYGON_RPC))
-        account = w3.eth.account.from_key(pk)
-        
-        # 1. Check MATIC for Gas
-        balance = w3.eth.get_balance(account.address)
-        if balance < w3.to_wei(0.01, 'ether'):
-            log_to_file(f"❌ Redemption failed: Insufficient MATIC for gas in EOA {account.address}")
+        # Step 1: Fetch redeemable positions from Data API
+        log_to_file(f"🔍 Fetching redeemable positions for {proxy_addr}...")
+        positions_url = "https://data-api.polymarket.com/positions"
+        params = {"user": proxy_addr, "redeemable": "true", "sizeThreshold": "0"}
+        resp = requests.get(positions_url, params=params, timeout=10)
+
+        if resp.status_code != 200:
+            log_to_file(f"❌ Failed to fetch positions: HTTP {resp.status_code}")
+            last_redeem_time = time.time()
             return
 
-        # 2. Setup CTF Contract
-        ctf = w3.eth.contract(address=w3.to_checksum_address(CTF_CONTRACT), abi=CTF_ABI)
-        
-        redeemed_count = 0
-        for t in winners:
-            log_to_file(f"🔍 Analyzing Win: {t.get('market_slug')}...")
-            cid = t.get("condition_id") or get_market_condition_id(t.get("market_slug"))
-            if not cid:
-                continue
-            
-            log_to_file(f"🔗 Redeeming: {t.get('market_slug')} (CID: {cid[:10]}...)")
-            
-            # Note: For Polymarket Safe wallets, the simplest method is often to try direct 
-            # redemption from the proxy if the owner signs it, OR using the Safe ABI.
-            # To keep it robust, we construct the redeemPositions data.
-            
-            # Construct the call data
-            # parentCollectionId is Bytes32(0)
-            p_cid = "0x" + "0" * 64
-            # IndexSets for binary is [1, 2]
-            
+        positions = resp.json()
+        if not isinstance(positions, list):
+            positions = [positions] if positions else []
+
+        redeemable_positions = [
+            p for p in positions
+            if float(p.get("size", 0)) > 0 or float(p.get("currentValue", 0)) > 0
+        ]
+
+        if not redeemable_positions:
+            log_to_file("✅ No redeemable positions found. All winnings already claimed!")
+            last_redeem_time = time.time()
+            return
+
+        log_to_file(f"💰 Found {len(redeemable_positions)} redeemable positions!")
+
+        # Step 2: Initialize ClobClient (needed for signing)
+        log_to_file("🔑 Initializing ClobClient for signing...")
+        clob_client = ClobClient(
+            "https://clob.polymarket.com",
+            key=pk,
+            chain_id=137,
+            signature_type=1,  # PROXY
+            funder=proxy_addr
+        )
+
+        # Step 3: Import poly_web3 components
+        from poly_web3.web3_service import ProxyWeb3Service
+        from poly_web3.const import (
+            CTF_ADDRESS, CTF_ABI_REDEEM, USDC_POLYGON, ZERO_BYTES32,
+            PROXY_INIT_CODE_HASH, RPC_URL, RELAYER_URL,
+            SUBMIT_TRANSACTION, GET_RELAY_PAYLOAD, GET_TRANSACTION,
+            STATE_MINED, STATE_CONFIRMED, STATE_FAILED
+        )
+        from poly_web3.signature.build import derive_proxy_wallet, create_struct_hash, keccak256
+        from poly_web3.signature.hash_message import hash_message
+        from poly_web3.signature import secp256k1
+        from eth_utils import to_bytes, to_checksum_address
+        from web3 import Web3
+        import hmac
+        import hashlib
+
+        log_to_file("🔧 Initializing ProxyWeb3Service...")
+        poly_service = ProxyWeb3Service(clob_client=clob_client)
+
+        # Step 4: Build redeem transactions
+        condition_ids = [p.get("conditionId") for p in redeemable_positions if p.get("conditionId")]
+        log_to_file(f"📋 Building redemption for {len(condition_ids)} markets...")
+
+        txs = []
+        for cid in condition_ids:
             try:
-                # We attempt to send a transaction FROM the EOA that triggers the SAFE to redeem.
-                # However, a simpler direct way for Polymarket bots is often to use the 
-                # CTExchange or FPMM contracts. 
-                # For this implementation, we will use the most direct CTF redemption.
-                
-                # NOTE: If the user address is a SAFE, the EOA cannot call redeemPositions(proxy) 
-                # directly unless the EOA is the proxy.
-                # We will attempt to call it as the proxy via the relayer methods if possible, 
-                # but since we are using Web3, we construct a standard transaction.
-                
-                # FALLBACK: If Proxy logic is too complex for a single script, we log the need.
-                # For now, we use the standard redeemPositions call structure.
-                
-                data = ctf.encode_abi("redeemPositions", [
-                    w3.to_checksum_address(USDC_E),
-                    p_cid,
-                    cid,
-                    [1, 2]
-                ])
-                
-                # Construct Safe Transaction (Minimal execTransaction ABI)
-                safe_abi = [{"name":"execTransaction","type":"function","inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"},{"name":"operation","type":"uint8"},{"name":"safeTxGas","type":"uint256"},{"name":"baseGas","type":"uint256"},{"name":"gasPrice","type":"uint256"},{"name":"gasToken","type":"address"},{"name":"refundReceiver","type":"address"},{"name":"signatures","type":"bytes"}],"outputs":[{"name":"success","type":"bool"}]},{"name":"nonce","type":"function","inputs":[],"outputs":[{"name":"","type":"uint256"}]}]
-                safe_contract = w3.eth.contract(address=w3.to_checksum_address(proxy_addr), abi=safe_abi)
-                
-                # For a simple 1-of-1 Safe, the signature is just:
-                # 000000000000000000000000{EOA_ADDRESS}000000000000000000000000000000000000000000000000000000000000000001
-                # where 01 is the signature type for EOA.
-                sig = "0x000000000000000000000000" + account.address[2:].lower() + "0000000000000000000000000000000000000000000000000000000000000000" + "01"
-                
-                nonce = safe_contract.functions.nonce().call()
-                
-                # Network-level Gas Pricing Optimization for Polygon
-                # Using 1.25x multiplier to avoid stuck transactions
-                current_gas_price = w3.eth.gas_price
-                optimized_gas_price = int(current_gas_price * 1.25)
-                
-                tx = safe_contract.functions.execTransaction(
-                    w3.to_checksum_address(CTF_CONTRACT),
-                    0,
-                    data,
-                    0, # Call
-                    0, 0, 0,
-                    "0x0000000000000000000000000000000000000000",
-                    "0x0000000000000000000000000000000000000000",
-                    sig
-                ).build_transaction({
-                    'from': account.address,
-                    'nonce': w3.eth.get_transaction_count(account.address),
-                    'gas': 350000, # Slightly higher limit for CTF redemptions
-                    'gasPrice': optimized_gas_price
+                tx_data = poly_service.build_ctf_redeem_tx_data(cid)
+                txs.append({
+                    "to": CTF_ADDRESS,
+                    "data": tx_data,
+                    "value": 0,
+                    "typeCode": 1,
                 })
-                
-                signed_tx = w3.eth.account.sign_transaction(tx, pk)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-                log_to_file(f"✅ Redemption Transaction Sent: {tx_hash.hex()}")
-                
-                # Mark as redeemed in our history
-                t["redeemed"] = True
-                redeemed_count += 1
-                time.sleep(2) # Avoid nonce issues
-            except Exception as ex:
-                log_to_file(f"⚠️ Redemption step failed: {ex}")
-                continue
-                
-        if redeemed_count > 0:
-            safe_write_json(TRADES_PATH, trades)
-            log_to_file(f"🎊 Successfully redeemed {redeemed_count} positions!")
+            except Exception as tx_err:
+                log_to_file(f"⚠️ Failed to build tx for {cid[:16]}: {tx_err}")
+
+        if not txs:
+            log_to_file("❌ No valid transactions to submit.")
+            last_redeem_time = time.time()
+            return
+
+        log_to_file(f"🚀 Submitting {len(txs)} transactions to relayer...")
+
+        # Step 5: Build and sign the proxy transaction
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
+        _from = to_checksum_address(clob_client.get_address())
+
+        # Get relay payload (nonce, relay address)
+        relay_resp = requests.get(
+            f"{RELAYER_URL}{GET_RELAY_PAYLOAD}",
+            params={"address": _from, "type": 1},  # type 1 = PROXY
+            timeout=10
+        )
+        relay_resp.raise_for_status()
+        rp = relay_resp.json()
+
+        # Encode the proxy transaction data
+        encoded_data = poly_service.encode_proxy_transaction_data(txs)
+
+        # Build signature
+        gas_limit_str = poly_service.estimate_gas(
+            tx={"from": _from, "to": CTF_ADDRESS, "data": encoded_data}
+        )
+        relayer_fee = "0"
+        relay_hub = "0xD216153c06E857cD7f72665E0aF1d7D82172F494"
+        proxy_factory = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
+        proxy = derive_proxy_wallet(_from, proxy_factory, PROXY_INIT_CODE_HASH)
+
+        tx_hash = create_struct_hash(
+            _from, CTF_ADDRESS, encoded_data,
+            relayer_fee, "0", gas_limit_str,
+            rp["nonce"], relay_hub, rp["address"]
+        )
+
+        message = {"raw": list(to_bytes(hexstr=tx_hash))}
+        r, s, recovery = secp256k1.sign(
+            hash_message(message)[2:], clob_client.signer.private_key
+        )
+        final_sig = secp256k1.serialize_signature(
+            r=secp256k1.int_to_hex(r, 32),
+            s=secp256k1.int_to_hex(s, 32),
+            v=28 if recovery else 27,
+            yParity=recovery,
+            to="hex"
+        )
+
+        req = {
+            "from": _from,
+            "to": CTF_ADDRESS,
+            "proxyWallet": proxy,
+            "data": encoded_data,
+            "nonce": rp["nonce"],
+            "signature": final_sig,
+            "signatureParams": {
+                "gasPrice": "0",
+                "gasLimit": gas_limit_str,
+                "relayerFee": relayer_fee,
+                "relayHub": relay_hub,
+                "relay": rp["address"],
+            },
+            "type": 1,
+            "metadata": "redeem",
+        }
+
+        # Step 6: Generate HMAC auth headers
+        ts = str(int(time.time()))
+        body = json.dumps(req, separators=(',', ':'))
+        msg = f"POST{SUBMIT_TRANSACTION}{ts}{body}".encode('utf-8')
+
+        # Get API credentials from CLOB client
+        api_key = clob_client.api_creds.api_key
+        api_secret = clob_client.api_creds.api_secret
+        api_passphrase = clob_client.api_creds.api_passphrase
+
+        signature = hmac.new(
+            api_secret.encode('utf-8'),
+            msg,
+            hashlib.sha256
+        ).hexdigest()
+
+        headers = {
+            "POLY_ADDRESS": _from,
+            "POLY_SIGNATURE": signature,
+            "POLY_TIMESTAMP": ts,
+            "POLY_API_KEY": api_key,
+            "POLY_PASSPHRASE": api_passphrase,
+            "Content-Type": "application/json",
+        }
+
+        # Step 7: Submit to relayer
+        log_to_file("📨 Submitting to Polymarket relayer...")
+        submit_resp = requests.post(
+            f"{RELAYER_URL}{SUBMIT_TRANSACTION}",
+            json=req,
+            headers=headers,
+            timeout=30
+        )
+        submit_resp.raise_for_status()
+        submit_result = submit_resp.json()
+
+        if submit_result.get("error"):
+            raise Exception(f"Relayer error: {submit_result.get('error')}")
+
+        transaction_id = submit_result.get("transactionID")
+        if not transaction_id:
+            raise Exception(f"Missing transactionID: {submit_result}")
+
+        log_to_file(f"✅ Transaction submitted! ID: {transaction_id[:20]}...")
+
+        # Step 8: Poll for completion
+        log_to_file("⏳ Waiting for on-chain confirmation...")
+        for attempt in range(100):
+            time.sleep(5)
+            status_resp = requests.get(
+                f"{RELAYER_URL}{GET_TRANSACTION}",
+                params={"transactionID": transaction_id},
+                timeout=10
+            )
+            status_resp.raise_for_status()
+            status = status_resp.json()
+
+            state = status.get("state", "")
+            if state in [STATE_MINED, STATE_CONFIRMED]:
+                log_to_file(f"🎊 Redemption confirmed! TX: {status.get('transactionHash', 'N/A')}")
+                for cid in condition_ids:
+                    mark_position_as_redeemed(cid)
+                break
+            elif state == STATE_FAILED:
+                raise Exception(f"Transaction failed: {status}")
+            elif attempt % 12 == 0:  # Log every ~60 seconds
+                log_to_file(f"⏳ Still waiting... state: {state}")
+        else:
+            log_to_file("⚠️ Transaction not confirmed within timeout, but may still succeed")
+
+        log_to_file(f"🎊 Successfully redeemed {len(condition_ids)} positions!")
 
     except Exception as e:
         log_to_file(f"⚠️ Global Redemption Error: {e}")
+        import traceback
+        log_to_file(f"📋 Traceback: {traceback.format_exc()}")
+    finally:
+        last_redeem_time = time.time()
+
+
+def mark_position_as_redeemed(condition_id):
+    """Mark a position as redeemed in the local trades.json file."""
+    if not condition_id:
+        return
+    
+    trades = safe_read_json(TRADES_PATH) or []
+    updated = False
+    
+    for trade in trades:
+        if trade.get("condition_id") == condition_id and trade.get("outcome") == "win" and not trade.get("redeemed"):
+            trade["redeemed"] = True
+            trade["redeemed_at"] = datetime.now(timezone.utc).isoformat()
+            updated = True
+    
+    if updated:
+        safe_write_json(TRADES_PATH, trades)
+        log_to_file(f"📝 Marked condition {condition_id[:10]}... as redeemed in local records")
 
 # ── API Routes ─────────────────────────────────────────────
 

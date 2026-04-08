@@ -8,7 +8,6 @@ import time
 import json
 import logging
 import os
-import sys
 import signal
 import requests
 from datetime import datetime, timezone, timedelta
