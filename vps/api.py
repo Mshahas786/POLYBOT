@@ -748,30 +748,34 @@ def bot_loop():
                         "edge": "Multi-Strategy v4.0", "status": "Analyzing", "confidence": confidence, "signals": signals
                     }
 
-            # 5. OPTIMIZED Entry Logic - Quality-first approach
+            # 5. OPTIMIZED Entry Logic - Counts DOWN from 5:00 to 0:00
                 # 
-                # TRADE QUALITY FILTERS:
-                # 1. Signal Agreement: 5+ signals agree (strong consensus)
-                # 2. Price Momentum: Current price moved 0.05%+ from baseline
-                # 3. Volatility: Enough movement to profit (not choppy)
-                # 4. Entry Window: 60s-270s (avoid first/last 30s noise)
-                # 5. Confidence: >= min_confidence threshold
+                # Market Window (counts DOWN):
+                # 5:00 → 4:00 → 3:00 → 2:00 → 1:00 → 0:00 (resolves)
                 #
-                # ENTRY WINDOWS:
-                # Phase 1: 90s-180s (early, needs 70%+ confidence)
-                # Phase 2: 180s-270s (standard, needs 60%+ confidence)
+                # ENTRY WINDOWS (time_remaining counts DOWN):
+                # Phase 1: 240s-150s remaining (4:00-2:30) - Early entry, needs strong signals
+                # Phase 2: 150s-60s remaining (2:30-1:00) - Standard entry
+                # Avoid: <60s remaining (too risky, no time for price to develop)
+                #
+                # TRADE QUALITY FILTERS:
+                # 1. Signal Agreement: 4+ signals agree (strong consensus)
+                # 2. Price Momentum: Current price moved 0.03%+ from baseline
+                # 3. Confidence: >= threshold for phase
 
                 entry_triggered = False
+                min_conf = cfg.get("min_confidence", 55)
 
-                # Only check entry during optimal windows
-                if 90 <= window_offset <= 270 and direction and confidence > 0:
-                    # Get signal details for quality check
+                # Only check entry when we have valid signals and direction
+                if direction and confidence > 0 and time_remaining >= 60:
+                    # Get signal agreement count
                     signal_agreement = 0
                     if signals:
                         votes_str = signals.get("votes", "0U/0D")
                         try:
                             up_votes = float(votes_str.split("U")[0])
-                            signal_agreement = up_votes if direction == "UP" else float(votes_str.split("U")[1].split("D")[0])
+                            down_votes = float(votes_str.split("U")[1].split("D")[0])
+                            signal_agreement = up_votes if direction == "UP" else down_votes
                         except:
                             pass
                     
@@ -779,30 +783,37 @@ def bot_loop():
                     price_moved = abs(diff) >= 0.03  # Price moved 0.03%+ from baseline
                     strong_signals = signal_agreement >= 4.0  # At least 4 signals agree
                     
-                    # Phase 1: Early entry (90s-180s, needs stronger signals)
-                    if 90 <= window_offset <= 180:
+                    # Phase 1: Early entry (4:00-2:30 remaining)
+                    # Best prices, needs strong confirmation
+                    if 150 <= time_remaining <= 240:
                         if confidence >= 70 and price_moved and strong_signals:
-                            current_strategy_info["status"] = "PHASE 1: Early Entry ✓"
+                            current_strategy_info["status"] = f"PHASE 1: Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left)"
                             entry_triggered = True
-                        elif confidence >= 65 and price_moved:
-                            current_strategy_info["status"] = f"PHASE 1: Waiting (conf={confidence}%, need 70%)"
+                        else:
+                            reasons = []
+                            if confidence < 70: reasons.append(f"conf {confidence:.0f}% < 70%")
+                            if not price_moved: reasons.append("price stable")
+                            if not strong_signals: reasons.append(f"signals {signal_agreement:.0f} < 4")
+                            current_strategy_info["status"] = f"PHASE 1: Waiting ({', '.join(reasons)})"
                     
-                    # Phase 2: Standard entry (180s-270s, standard requirements)
-                    elif 180 < window_offset <= 270:
+                    # Phase 2: Standard entry (2:30-1:00 remaining)
+                    # Standard requirements, price should have developed
+                    elif 60 <= time_remaining < 150:
                         if confidence >= 60 and price_moved:
-                            current_strategy_info["status"] = "PHASE 2: Standard Entry ✓"
+                            current_strategy_info["status"] = f"PHASE 2: Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left)"
                             entry_triggered = True
-                        elif confidence >= 55:
-                            current_strategy_info["status"] = f"PHASE 2: Waiting (conf={confidence}%, need 60%)"
-                    else:
-                        current_strategy_info["status"] = f"Outside entry window ({window_offset}s)"
+                        else:
+                            reasons = []
+                            if confidence < 60: reasons.append(f"conf {confidence:.0f}% < 60%")
+                            if not price_moved: reasons.append("price stable")
+                            current_strategy_info["status"] = f"PHASE 2: Waiting ({', '.join(reasons)})"
                     
-                    # Check why we're not entering (debug info)
-                    if not entry_triggered and confidence > 0:
-                        if not price_moved:
-                            current_strategy_info["status"] += " | Price hasn't moved enough"
-                        if not strong_signals and 90 <= window_offset <= 180:
-                            current_strategy_info["status"] += " | Need stronger signal agreement"
+                    # Too early (< 4:00 remaining) or too late (< 1:00 remaining)
+                    else:
+                        if time_remaining > 240:
+                            current_strategy_info["status"] = f"Early: {time_remaining//60}:{time_remaining%60:02d} left (wait)"
+                        elif time_remaining < 60:
+                            current_strategy_info["status"] = f"Late: {time_remaining//60}:{time_remaining%60:02d} left (skip)"
 
                 if entry_triggered:
                     # Filter trades in the last hour for limit
