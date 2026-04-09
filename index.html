@@ -1112,12 +1112,16 @@
 
         <div class="card">
             <div class="card-title">💰 LIQUIDITY & SETTLEMENT</div>
-            <div class="setting-hint" style="margin-bottom:12px;">Winning positions must be redeemed on-chain to recover
-                USDC. The bot auto-redeems every 10 minutes. You can also trigger manually here.</div>
-            <button class="save-btn" style="background:var(--green); color:black;" id="redeemBtn"
-                onclick="triggerRedeem()">💎 CLAIM ALL WINNINGS</button>
-            <div class="setting-hint" style="margin-top:8px; color:var(--muted);">Relayer covers gas fees. No MATIC
-                needed.</div>
+            <div class="warn-box"
+                style="margin-bottom:12px; background:rgba(240,180,41,0.1); border-color:rgba(240,180,41,0.3); color:var(--accent);">
+                ⚠️ Auto-claim is currently disabled. The positions API is not returning redeemable positions correctly.
+            </div>
+            <div class="setting-hint" style="margin-bottom:12px;">To claim your winnings manually:</div>
+            <a href="https://polymarket.com/portfolio" target="_blank"
+                style="display:block; text-align:center; padding:14px; background:var(--green); color:black; border-radius:10px; text-decoration:none; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; margin-bottom:8px;">🏆
+                CLAIM ON POLYMARKET →</a>
+            <div class="setting-hint" style="margin-top:8px; color:var(--muted);">Gas-free via Polymarket relayer. No
+                MATIC needed.</div>
         </div>
 
         <div class="card">

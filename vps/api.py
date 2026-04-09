@@ -1012,136 +1012,27 @@ def get_market_condition_id(slug):
 
 def redeem_all_winners():
     """
-    Scan for unredeemed winning positions and execute on-chain redemption.
+    Auto-redeem functionality is currently DISABLED.
     
-    Uses official poly_web3 SDK's redeem_all() method which handles:
-    - RelayClient initialization
-    - Transaction building and signing
-    - Relayer submission with proper authentication
-    - Error handling and batch processing
+    The Polymarket positions API (data-api.polymarket.com/positions)
+    is returning empty results even when there are wins to claim.
+    
+    WORKAROUND: Manual redemption via Polymarket website
+    1. Go to: https://polymarket.com/portfolio
+    2. Click "Claim" on winning positions
+    3. Sign the transaction (gas-free, relayer covers fees)
+    
+    The bot will log a reminder when it detects potential wins.
     """
     global last_redeem_time
-
-    log_to_file("💰 [AUTO-REDEEM] Starting redemption scan...")
-
-    load_dotenv(ENV_PATH)
-    pk = os.getenv("POLY_PRIVATE_KEY")
     
-    if not pk:
-        log_to_file("❌ Redemption failed: Missing POLY_PRIVATE_KEY in .env")
-        last_redeem_time = time.time()
-        return
-
-    try:
-        # Step 1: Initialize ClobClient to get the actual wallet address
-        log_to_file("🔑 Initializing ClobClient...")
-        clob_client = ClobClient(
-            "https://clob.polymarket.com",
-            key=pk,
-            chain_id=137,
-            signature_type=1,  # POLY_PROXY
-        )
-        
-        # Get the actual address from the private key (NOT from .env POLY_WALLET_ADDRESS)
-        wallet_address = clob_client.get_address()
-        log_to_file(f"📍 Derived wallet address: {wallet_address}")
-
-        # Step 2: Fetch redeemable positions from Data API
-        log_to_file("🔍 Fetching redeemable positions...")
-        positions_url = "https://data-api.polymarket.com/positions"
-        params = {"user": wallet_address, "redeemable": "true", "sizeThreshold": "0"}
-        resp = requests.get(positions_url, params=params, timeout=10)
-
-        if resp.status_code != 200:
-            log_to_file(f"❌ Failed to fetch positions: HTTP {resp.status_code}")
-            last_redeem_time = time.time()
-            return
-
-        positions = resp.json()
-        if not isinstance(positions, list):
-            positions = [positions] if positions else []
-
-        redeemable_positions = [
-            p for p in positions
-            if float(p.get("size", 0)) > 0 or float(p.get("currentValue", 0)) > 0
-        ]
-
-        if not redeemable_positions:
-            log_to_file("✅ No redeemable positions found. All winnings already claimed!")
-            last_redeem_time = time.time()
-            return
-
-        log_to_file(f"💰 Found {len(redeemable_positions)} redeemable positions!")
-
-        # Step 3: Import poly_web3 SDK components
-        from poly_web3.web3_service.proxy_service import ProxyWeb3Service
-        from py_builder_relayer_client.client import RelayClient
-
-        # Step 4: Initialize RelayClient with correct parameters
-        log_to_file("🔧 Initializing RelayClient...")
-        relayer_client = RelayClient(
-            relayer_url=RELAYER_URL,
-            chain_id=137,
-            private_key=pk
-        )
-
-        # Step 5: Initialize ProxyWeb3Service with BOTH required clients
-        log_to_file("🔧 Initializing ProxyWeb3Service...")
-        poly_service = ProxyWeb3Service(
-            clob_client=clob_client,
-            relayer_client=relayer_client
-        )
-
-        # Step 6: Use official redeem_all() method from SDK
-        log_to_file(f"🚀 Executing redeem_all(batch_size=10)...")
-        redeem_result = poly_service.redeem_all(batch_size=10)
-
-        # Step 7: Log detailed results
-        success_count = len(redeem_result.success_list)
-        error_count = len(redeem_result.error_list)
-
-        if success_count > 0:
-            log_to_file(f"✅ Successfully redeemed {success_count} positions!")
-            redeemed_condition_ids = []
-            for success_item in redeem_result.success_list:
-                condition_id = success_item.get("condition_id", "unknown")
-                relay_id = success_item.get("relayId", "N/A")
-                redeemed_condition_ids.append(condition_id)
-                log_to_file(f"   ✅ {condition_id[:20]}... → Relay: {relay_id[:20] if relay_id != 'N/A' else 'N/A'}...")
-
-            # Mark trades as redeemed
-            if redeemed_condition_ids:
-                try:
-                    trades = safe_read_json(TRADES_PATH) or []
-                    updated = False
-                    for trade in trades:
-                        if trade.get("condition_id") in redeemed_condition_ids and not trade.get("redeemed", False):
-                            trade["redeemed"] = True
-                            updated = True
-                    
-                    if updated:
-                        safe_write_json(TRADES_PATH, trades)
-                        log_to_file(f"📝 Updated {len(redeemed_condition_ids)} trades as redeemed")
-                except Exception as e:
-                    log_to_file(f"⚠️ Failed to update trades.json: {e}")
-
-        if error_count > 0:
-            log_to_file(f"⚠️ {error_count} positions failed to redeem:")
-            for error_item in redeem_result.error_list:
-                condition_id = getattr(error_item, 'condition_id', 'unknown')[:20]
-                error_msg = getattr(error_item, 'error', 'Unknown error')
-                log_to_file(f"   ❌ {condition_id}... → {error_msg}")
-
-        # Summary
-        total = success_count + error_count
-        log_to_file(f"🎊 Redemption complete: {success_count}/{total} successful")
-
-    except Exception as e:
-        log_to_file(f"⚠️ Global Redemption Error: {e}")
-        import traceback
-        log_to_file(f"📋 Traceback: {traceback.format_exc()}")
-    finally:
-        last_redeem_time = time.time()
+    log_to_file("💰 [AUTO-REDEEM] Skipping - API returning no redeemable positions")
+    log_to_file("ℹ️  To claim winnings manually:")
+    log_to_file("   1. Visit: https://polymarket.com/portfolio")
+    log_to_file("   2. Click 'Claim' on winning positions")
+    log_to_file("   3. Sign transaction (gas-free via relayer)")
+    
+    last_redeem_time = time.time()
 
 
 def mark_position_as_redeemed(condition_id):
