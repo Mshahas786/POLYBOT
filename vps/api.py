@@ -343,7 +343,10 @@ def analyze_signals(price_to_beat):
         buf = list(price_buffer)
         current = last_btc_price
 
-    if len(buf) < 100 or not current or not price_to_beat:
+    if len(buf) < 50 or not current or not price_to_beat:
+        # Log why we're skipping (only periodically)
+        if len(buf) < 50 and len(buf) % 25 == 0 and len(buf) > 0:
+            log_to_file(f"⚠️ Signal engine: Buffer building ({len(buf)}/50 prices)")
         return None, 0, {}
 
     prices = [p for _, p in buf]
@@ -560,6 +563,16 @@ def analyze_signals(price_to_beat):
     if confidence < _min_conf:
         confidence = 0
         direction = None
+    
+    # Log signal analysis for debugging (when meaningful or during entry windows)
+    _window_offset_check = int(time.time() % 300)
+    if _raw_conf > 40 or (60 <= _window_offset_check <= 285):
+        log_to_file(
+            f"📊 SIGNALS: votes_up={votes_up:.1f} votes_down={votes_down:.1f} | "
+            f"raw_conf={_raw_conf:.1f}% | threshold={_min_conf}% | "
+            f"final_conf={confidence}% | dir={direction or 'NONE'} | "
+            f"window={_window_offset_check}s"
+        )
     
     # ── Build Signal Details ──
     signals = {
