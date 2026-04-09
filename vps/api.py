@@ -930,11 +930,12 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
 
             log_to_file(f"🎯 Placing MARKET {direction} Order (Amount: ${bet_size})")
 
-            # Simple FOK execution - single attempt
-            capped_price = 0.70
+            # Use FAK (Fill-And-Kill) which allows partial fills
+            # This works better on thin liquidity markets
+            capped_price = 0.95  # Higher cap to match available ask prices
             
             try:
-                log_to_file(f"📊 FOK order @ ${capped_price:.2f}")
+                log_to_file(f"📊 FAK order @ ${capped_price:.2f} (partial fill allowed)")
                 
                 order_args = MarketOrderArgs(
                     token_id=token_id,
@@ -943,19 +944,19 @@ def execute_trade(direction, token_id, token_price, btc_price, slug, window_ts, 
                     price=capped_price
                 )
                 signed_order = client.create_market_order(order_args)
-                resp = client.post_order(signed_order, OrderType.FOK)
+                resp = client.post_order(signed_order, OrderType.FAK)
                 
                 if resp and (hasattr(resp, "orderID") or (isinstance(resp, dict) and "orderID" in resp)):
                     order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
                     status = "placed"
-                    log_to_file(f"✅ LIVE FOK ORDER SUCCESS: {direction} | OrderID: {order_id}")
+                    log_to_file(f"✅ LIVE FAK ORDER SUCCESS: {direction} | OrderID: {order_id}")
                 else:
                     status = "failed"
-                    log_to_file(f"⚠️ FOK order failed, will retry on next strong signal")
+                    log_to_file(f"⚠️ FAK order failed: {resp}")
                 
             except Exception as e:
                 status = "failed"
-                log_to_file(f"⚠️ FOK order failed: {e} - will retry on next strong signal")
+                log_to_file(f"⚠️ FAK order failed: {e}")
                 
         except Exception as e:
             status = "error"
