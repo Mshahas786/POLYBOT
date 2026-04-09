@@ -870,7 +870,7 @@ def check_outcomes(baselines):
     now = time.time()
     wins = 0
     losses = 0
-    
+
     for t in trades:
         # Skip trades already counted with outcomes
         if t.get("outcome") == "win":
@@ -884,10 +884,24 @@ def check_outcomes(baselines):
         wts = t.get("window_ts", 0)
         if now < wts + 330:
             continue
+        
+        # Get the ACTUAL price to beat (not from in-memory dict that gets wiped on restart)
+        # Priority: 1. baselines dict, 2. CLOB API, 3. Binance historical, 4. CryptoCompare
+        base = baselines.get(wts)
+        if not base:
+            condition_id = t.get("condition_id")
+            if condition_id:
+                base = get_clob_market_line(condition_id)
+            if not base:
+                base = get_price_to_beat(wts)
+        
+        if not base:
+            log_to_file(f"⚠️ Cannot determine outcome for {t.get('direction')} - no baseline price available")
+            continue
+            
         try:
             resp = requests.get(f"https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=1&toTs={wts+300}", timeout=5)
             close = float(resp.json()["Data"]["Data"][-1]["close"])
-            base = baselines.get(wts, t.get("btc_price"))
             win = (t["direction"] == "UP" and close >= base) or (t["direction"] == "DOWN" and close < base)
             t["outcome"] = "win" if win else "loss"
             log_to_file(f"{'✅' if win else '❌'} {t['direction']} Result | Base: {base} → Close: {close}")
