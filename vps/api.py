@@ -748,26 +748,32 @@ def bot_loop():
                         "edge": "Multi-Strategy v4.0", "status": "Analyzing", "confidence": confidence, "signals": signals
                     }
 
-            # 5. OPTIMIZED Entry Logic - Counts DOWN from 5:00 to 0:00
-                # 
+            # 5. OPTIMIZED Entry Logic - EARLY entry for better ROI
+                #
+                # RISK/REWARD MATH (why late entry is terrible):
+                # Enter at 0:30 → token ~$0.95, win = +$0.05, lose = -$0.95 (1 loss = 19 wins)
+                # Enter at 4:00 → token ~$0.50, win = +$0.50, lose = -$0.50 (1:1 risk/reward)
+                # Early entry has 10x better risk/reward!
+                #
                 # Market Window (counts DOWN):
                 # 5:00 → 4:00 → 3:00 → 2:00 → 1:00 → 0:00 (resolves)
                 #
                 # ENTRY WINDOWS (time_remaining counts DOWN):
-                # Phase 1: 240s-150s remaining (4:00-2:30) - Early entry, needs strong signals
-                # Phase 2: 150s-60s remaining (2:30-1:00) - Standard entry
-                # Avoid: <60s remaining (too risky, no time for price to develop)
+                # Phase 1: 240s-150s (4:00-2:30) - Best prices (~$0.45-$0.65), strong signals
+                # Phase 2: 150s-90s (2:30-1:30) - Good prices (~$0.55-$0.75), standard
+                # AVOID: <90s remaining (token too expensive, terrible ROI)
                 #
                 # TRADE QUALITY FILTERS:
-                # 1. Signal Agreement: 4+ signals agree (strong consensus)
-                # 2. Price Momentum: Current price moved 0.03%+ from baseline
-                # 3. Confidence: >= threshold for phase
+                # 1. Price Momentum: Current price moved 0.05%+ from baseline
+                # 2. Signal Strength: 4+ weighted votes agree
+                # 3. Volatility: BTC moved 0.1%+ in last 60s (active market)
+                # 4. Confidence: >= threshold for phase
 
                 entry_triggered = False
                 min_conf = cfg.get("min_confidence", 55)
 
                 # Only check entry when we have valid signals and direction
-                if direction and confidence > 0 and time_remaining >= 60:
+                if direction and confidence > 0 and 90 <= time_remaining <= 240:
                     # Get signal agreement count
                     signal_agreement = 0
                     if signals:
@@ -778,42 +784,55 @@ def bot_loop():
                             signal_agreement = up_votes if direction == "UP" else down_votes
                         except:
                             pass
-                    
+
                     # Quality filters
-                    price_moved = abs(diff) >= 0.03  # Price moved 0.03%+ from baseline
-                    strong_signals = signal_agreement >= 4.0  # At least 4 signals agree
-                    
+                    price_moved = abs(diff) >= 0.05  # Price moved 0.05%+ from baseline
+                    strong_signals = signal_agreement >= 4.0  # At least 4 weighted votes
+
+                    # Calculate short-term volatility (last 60s)
+                    with price_lock:
+                        recent_prices = [p for t, p in price_buffer if t > time.time() - 60]
+                    if len(recent_prices) >= 10:
+                        high = max(recent_prices)
+                        low = min(recent_prices)
+                        volatility = (high - low) / low * 100
+                        volatile_market = volatility >= 0.1  # BTC moved 0.1%+ in 60s
+                    else:
+                        volatility = 0
+                        volatile_market = True  # Assume active if not enough data
+
                     # Phase 1: Early entry (4:00-2:30 remaining)
-                    # Best prices, needs strong confirmation
+                    # Best prices (~$0.45-$0.65), needs strong confirmation
                     if 150 <= time_remaining <= 240:
-                        if confidence >= 70 and price_moved and strong_signals:
-                            current_strategy_info["status"] = f"PHASE 1: Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left)"
+                        if confidence >= 70 and price_moved and strong_signals and volatile_market:
+                            current_strategy_info["status"] = f"PHASE 1: Early Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left, vol={volatility:.2f}%)"
                             entry_triggered = True
                         else:
                             reasons = []
                             if confidence < 70: reasons.append(f"conf {confidence:.0f}% < 70%")
                             if not price_moved: reasons.append("price stable")
                             if not strong_signals: reasons.append(f"signals {signal_agreement:.0f} < 4")
+                            if not volatile_market: reasons.append(f"low vol {volatility:.2f}%")
                             current_strategy_info["status"] = f"PHASE 1: Waiting ({', '.join(reasons)})"
-                    
-                    # Phase 2: Standard entry (2:30-1:00 remaining)
-                    # Standard requirements, price should have developed
-                    elif 60 <= time_remaining < 150:
+
+                    # Phase 2: Standard entry (2:30-1:30 remaining)
+                    # Good prices (~$0.55-$0.75), standard requirements
+                    elif 90 <= time_remaining < 150:
                         if confidence >= 60 and price_moved:
-                            current_strategy_info["status"] = f"PHASE 2: Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left)"
+                            current_strategy_info["status"] = f"PHASE 2: Standard Entry ✓ ({time_remaining//60}:{time_remaining%60:02d} left)"
                             entry_triggered = True
                         else:
                             reasons = []
                             if confidence < 60: reasons.append(f"conf {confidence:.0f}% < 60%")
                             if not price_moved: reasons.append("price stable")
                             current_strategy_info["status"] = f"PHASE 2: Waiting ({', '.join(reasons)})"
-                    
-                    # Too early (< 4:00 remaining) or too late (< 1:00 remaining)
-                    else:
-                        if time_remaining > 240:
-                            current_strategy_info["status"] = f"Early: {time_remaining//60}:{time_remaining%60:02d} left (wait)"
-                        elif time_remaining < 60:
-                            current_strategy_info["status"] = f"Late: {time_remaining//60}:{time_remaining%60:02d} left (skip)"
+
+                # Outside entry window
+                elif direction and confidence > 0:
+                    if time_remaining > 240:
+                        current_strategy_info["status"] = f"Early: {time_remaining//60}:{time_remaining%60:02d} left (wait for 4:00)"
+                    elif time_remaining < 90:
+                        current_strategy_info["status"] = f"Late: {time_remaining//60}:{time_remaining%60:02d} left (token too expensive, skip)"
 
                 if entry_triggered:
                     # Filter trades in the last hour for limit
