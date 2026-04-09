@@ -748,32 +748,61 @@ def bot_loop():
                         "edge": "Multi-Strategy v4.0", "status": "Analyzing", "confidence": confidence, "signals": signals
                     }
 
-                # 5. IMPROVED Entry Timing - Two-Phase Strategy
-                # Based on research of profitable Polymarket bots:
+            # 5. OPTIMIZED Entry Logic - Quality-first approach
+                # 
+                # TRADE QUALITY FILTERS:
+                # 1. Signal Agreement: 5+ signals agree (strong consensus)
+                # 2. Price Momentum: Current price moved 0.05%+ from baseline
+                # 3. Volatility: Enough movement to profit (not choppy)
+                # 4. Entry Window: 60s-270s (avoid first/last 30s noise)
+                # 5. Confidence: >= min_confidence threshold
                 #
-                # PHASE 1: Early Entry Window (60s-180s)
-                #   - Use when confidence >= 75% (very strong signals)
-                #   - Best for clear trending markets
-                #   - Get better prices (~0.55-0.65)
-                #
-                # PHASE 2: Late Entry Window (180s-285s)
-                #   - Use when confidence >= 65% (standard threshold)
-                #   - Last-Second Momentum Snipe strategy active
-                #   - More accurate but worse prices (~0.65-0.80)
-                #
-                # RESEARCH: ~15-20% of periods resolve in final 30-60 seconds
-                
+                # ENTRY WINDOWS:
+                # Phase 1: 90s-180s (early, needs 70%+ confidence)
+                # Phase 2: 180s-270s (standard, needs 60%+ confidence)
+
                 entry_triggered = False
 
-                # Phase 1: Early entry (strong signals only)
-                if 60 <= window_offset <= 180 and confidence >= 75:
-                    current_strategy_info["status"] = "PHASE 1: Early Entry Window"
-                    entry_triggered = True
-
-                # Phase 2: Late entry (standard confidence)
-                elif 180 <= window_offset <= 285 and confidence >= 65:
-                    current_strategy_info["status"] = "PHASE 2: Late Entry Window"
-                    entry_triggered = True
+                # Only check entry during optimal windows
+                if 90 <= window_offset <= 270 and direction and confidence > 0:
+                    # Get signal details for quality check
+                    signal_agreement = 0
+                    if signals:
+                        votes_str = signals.get("votes", "0U/0D")
+                        try:
+                            up_votes = float(votes_str.split("U")[0])
+                            signal_agreement = up_votes if direction == "UP" else float(votes_str.split("U")[1].split("D")[0])
+                        except:
+                            pass
+                    
+                    # Quality filters
+                    price_moved = abs(diff) >= 0.03  # Price moved 0.03%+ from baseline
+                    strong_signals = signal_agreement >= 4.0  # At least 4 signals agree
+                    
+                    # Phase 1: Early entry (90s-180s, needs stronger signals)
+                    if 90 <= window_offset <= 180:
+                        if confidence >= 70 and price_moved and strong_signals:
+                            current_strategy_info["status"] = "PHASE 1: Early Entry ✓"
+                            entry_triggered = True
+                        elif confidence >= 65 and price_moved:
+                            current_strategy_info["status"] = f"PHASE 1: Waiting (conf={confidence}%, need 70%)"
+                    
+                    # Phase 2: Standard entry (180s-270s, standard requirements)
+                    elif 180 < window_offset <= 270:
+                        if confidence >= 60 and price_moved:
+                            current_strategy_info["status"] = "PHASE 2: Standard Entry ✓"
+                            entry_triggered = True
+                        elif confidence >= 55:
+                            current_strategy_info["status"] = f"PHASE 2: Waiting (conf={confidence}%, need 60%)"
+                    else:
+                        current_strategy_info["status"] = f"Outside entry window ({window_offset}s)"
+                    
+                    # Check why we're not entering (debug info)
+                    if not entry_triggered and confidence > 0:
+                        if not price_moved:
+                            current_strategy_info["status"] += " | Price hasn't moved enough"
+                        if not strong_signals and 90 <= window_offset <= 180:
+                            current_strategy_info["status"] += " | Need stronger signal agreement"
 
                 if entry_triggered:
                     # Filter trades in the last hour for limit
@@ -795,7 +824,7 @@ def bot_loop():
                     target_token_id = up_token_id if direction == "UP" else down_token_id
                     target_price = up_price if direction == "UP" else down_price
 
-                    min_conf = cfg.get("min_confidence", 65)
+                    min_conf = cfg.get("min_confidence", 55)
 
                     if direction and confidence >= min_conf:
                         if len(recent_trades) >= max_hour:
@@ -803,31 +832,9 @@ def bot_loop():
                         elif not client and not cfg.get("dry_run", True):
                             current_strategy_info["status"] = "WAITING FOR LIVE CLIENT"
                         elif target_token_id:
+                            log_to_file(f"🚀 ENTERING TRADE: {direction} @ {confidence:.0f}% confidence | Window: {window_offset}s")
                             execute_trade(direction, target_token_id, target_price, price_now, slug, window_ts, confidence, signals, cfg, client, market)
                             entry_triggered = False
-                
-                # Check for failed trades from previous windows to retry
-                elif client and not cfg.get("dry_run", True):
-                    failed_trades = [t for t in trades if t.get("status") == "failed" and t.get("window_ts", 0) >= window_ts - 600]
-                    if failed_trades and confidence >= 70:
-                        last_failed = failed_trades[-1]
-                        log_to_file(f"🔄 Retrying failed trade: {last_failed.get('direction')} from window {last_failed.get('window_ts')}")
-                        execute_trade(
-                            last_failed.get("direction"),
-                            last_failed.get("token_id"),
-                            last_failed.get("token_price", 0.50),
-                            price_now,
-                            last_failed.get("market_slug", slug),
-                            window_ts,
-                            confidence,
-                            signals,
-                            cfg,
-                            client,
-                            market
-                        )
-                        # Mark retry attempt
-                        last_failed["retry_attempt"] = last_failed.get("retry_attempt", 0) + 1
-                        safe_write_json(TRADES_PATH, trades)
 
             check_outcomes(market_baselines)
 
