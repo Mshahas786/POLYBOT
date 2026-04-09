@@ -868,16 +868,6 @@ def bot_loop():
 
             check_outcomes(market_baselines)
 
-            # 6. Periodic Redemption (Exactly every 10 minutes)
-            # Use a global timestamp lock to prevent double-firing in the same window
-            global last_redeem_time
-            if now - last_redeem_time > 600:
-                log_to_file("💰 [AUTO] 10-Minute Settlement Heartbeat...")
-                # Ensure outcomes are checked first so we know what to redeem
-                check_outcomes(market_baselines)
-                threading.Thread(target=redeem_all_winners, daemon=True).start()
-                last_redeem_time = now
-
             if len(market_baselines) > 20:
                 market_baselines = {k: v for k, v in market_baselines.items() if k > window_ts - 3600}
 
