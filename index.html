@@ -1089,8 +1089,8 @@
             </div>
             <div class="setting-group">
                 <label class="setting-label">MIN CONFIDENCE %</label>
-                <input class="setting-input" id="minConfidence" type="number" value="60" min="10" max="100">
-                <div class="setting-hint">Minimum signal confidence to trade. Recommended: 60-70%</div>
+                <input class="setting-input" id="minConfidence" type="number" value="55" min="10" max="100">
+                <div class="setting-hint">Minimum signal confidence to trade. Recommended: 55-65%</div>
             </div>
             <div class="setting-group">
                 <label class="setting-label">ORDER EXECUTION</label>
@@ -1418,7 +1418,7 @@
                 dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
                 bet_size: parseFloat(document.getElementById('betSize').value) || 1,
                 max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 12,
-                min_confidence: parseInt(document.getElementById('minConfidence').value) || 60,
+                min_confidence: parseInt(document.getElementById('minConfidence').value) || 55,
             };
             try {
                 await fetch(VPS_URL + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });

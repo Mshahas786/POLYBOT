@@ -541,24 +541,23 @@ def analyze_signals(price_to_beat):
             votes_down += weights["last_second"]
         total_weight += weights["last_second"]
     
-    # ── Calculate Confidence ──
+    # ── Calculate Confidence (Old working formula: divide by 7) ──
+    # The old bot used / 7 and worked at 70%+ win rate
+    # Keep backward compatibility with the proven formula
     total_votes = votes_up + votes_down
     if total_votes == 0:
         return None, 0, {}
     
     direction = "UP" if votes_up > votes_down else "DOWN"
-    confidence = max(votes_up, votes_down) / total_weight * 100
+    confidence = max(votes_up, votes_down) / 7 * 100  # Old working formula
     
-    # ── Confidence Threshold (configurable, default 60%) ──
-    # Load from config.json if available, otherwise use 60% default
+    # ── Confidence Threshold (configurable, default 55%) ──
+    # Old bot used 50-60% threshold
     try:
         _cfg = safe_read_json(CONFIG_PATH) or {}
-        _min_conf = float(_cfg.get("min_confidence", 60))
+        _min_conf = float(_cfg.get("min_confidence", 55))
     except:
-        _min_conf = 60
-    
-    # Log raw confidence before threshold check (for debugging)
-    _raw_conf = confidence
+        _min_conf = 55
     
     if confidence < _min_conf:
         confidence = 0
@@ -566,6 +565,7 @@ def analyze_signals(price_to_beat):
     
     # Log signal analysis for debugging (when meaningful or during entry windows)
     _window_offset_check = int(time.time() % 300)
+    _raw_conf = max(votes_up, votes_down) / 7 * 100
     if _raw_conf > 40 or (60 <= _window_offset_check <= 285):
         log_to_file(
             f"📊 SIGNALS: votes_up={votes_up:.1f} votes_down={votes_down:.1f} | "
