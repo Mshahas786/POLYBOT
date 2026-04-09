@@ -1011,27 +1011,8 @@ def get_market_condition_id(slug):
     return None
 
 def redeem_all_winners():
-    """
-    Auto-redeem functionality is currently DISABLED.
-    
-    The Polymarket positions API (data-api.polymarket.com/positions)
-    is returning empty results even when there are wins to claim.
-    
-    WORKAROUND: Manual redemption via Polymarket website
-    1. Go to: https://polymarket.com/portfolio
-    2. Click "Claim" on winning positions
-    3. Sign the transaction (gas-free, relayer covers fees)
-    
-    The bot will log a reminder when it detects potential wins.
-    """
+    """Auto-redeem disabled."""
     global last_redeem_time
-    
-    log_to_file("💰 [AUTO-REDEEM] Skipping - API returning no redeemable positions")
-    log_to_file("ℹ️  To claim winnings manually:")
-    log_to_file("   1. Visit: https://polymarket.com/portfolio")
-    log_to_file("   2. Click 'Claim' on winning positions")
-    log_to_file("   3. Sign transaction (gas-free via relayer)")
-    
     last_redeem_time = time.time()
 
 
