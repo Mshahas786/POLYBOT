@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PolyBot Unified Backend v3.1
-70%+ Accuracy & Official Baseline Sync.
+PolyBot v4.0 - Lightweight Trading Engine
+Optimized for free-tier VPS & Raspberry Pi
 """
 
 import json
@@ -17,51 +17,16 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
-from web3 import Web3
-from eth_abi import encode
 
-# Use poly_web3 for redemption (the official working SDK)
-try:
-    from poly_web3 import PolyWeb3Service, WalletType
-    from poly_web3 import RedeemResult, RedeemErrorItem
-    RELAYER_AVAILABLE = True
-except (ImportError, ModuleNotFoundError):
-    PolyWeb3Service = None
-    WalletType = None
-    RELAYER_AVAILABLE = False
-
-# RPC Configuration (Prioritize .env, then reliable public RPCs)
-# Using multiple reliable Polygon RPC endpoints
+# Lightweight config - no heavy web3 imports unless needed for redemption
 POLYGON_RPC = os.getenv("POLYGON_RPC", "https://polygon-rpc.com")
-FALLBACK_RPCS = [
-    "https://1rpc.io/matic",
-    "https://rpc.ankr.com/polygon",
-    "https://polygon-mainnet.public.blastapi.io",
-    "https://polygon.drpc.org"
-]
-
-# Relayer Configuration
 RELAYER_URL = "https://relayer-v2.polymarket.com"
-CHAIN_ID = 137  # Polygon Mainnet
+CHAIN_ID = 137
 
-# Signature types
-SIGNATURE_TYPE_EOA = 0  # Direct EOA wallet
-SIGNATURE_TYPE_POLY_PROXY = 1  # Polymarket proxy wallet (email accounts)
-SIGNATURE_TYPE_GNOSIS_SAFE = 2  # Gnosis Safe wallet (browser wallets)
-
-CTF_ABI = [
-    {
-        "name": "redeemPositions",
-        "type": "function",
-        "inputs": [
-            {"name": "collateralToken", "type": "address"},
-            {"name": "parentCollectionId", "type": "bytes32"},
-            {"name": "conditionId", "type": "bytes32"},
-            {"name": "indexSets", "type": "uint256[]"}
-        ],
-        "outputs": []
-    }
-]
+# Performance tuning for low-resource systems
+PRICE_BUFFER_SIZE = 150  # Reduced from 600 (~5 min of data at 2s intervals)
+SIGNAL_CHECK_INTERVAL = 15  # Seconds between signal checks (was every 1s)
+LOG_BUFFER_SIZE = 500  # Max log entries to keep in memory
 
 
 app = Flask(__name__)
@@ -94,7 +59,7 @@ current_strategy_info = {
 }
 last_redeem_time = time.time()  # Initialize to current time to trigger first redemption after 10 min
 
-# ── Binance WebSocket ──────────────────────────────────────
+# ── Binance WebSocket (Lightweight) ──────────────────────
 class BinanceWS:
     def __init__(self):
         self.url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
@@ -112,15 +77,15 @@ class BinanceWS:
             # Buffer price every 2 seconds (avoid flooding)
             if now - self.last_buffer_update >= 2:
                 price_buffer.append((now, price))
-                if len(price_buffer) > 600:  # ~20 min of data for SMA
-                    price_buffer = price_buffer[-600:]
+                if len(price_buffer) > PRICE_BUFFER_SIZE:
+                    price_buffer = price_buffer[-PRICE_BUFFER_SIZE:]
                 self.last_buffer_update = now
 
     def on_error(self, ws, error):
-        print(f"WS Error: {error}")
+        # Reduced logging for performance
+        pass
 
     def on_close(self, ws, close_status_code, close_msg):
-        print("### WS Closed - Reconnecting in 5s ###")
         time.sleep(5)
         self.run()
 
@@ -131,7 +96,8 @@ class BinanceWS:
             on_error=self.on_error,
             on_close=self.on_close
         )
-        self.ws.run_forever()
+        # Enable ping/pong to keep connection alive with lower CPU
+        self.ws.run_forever(ping_interval=30, ping_timeout=10)
 
     def start(self):
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -161,14 +127,25 @@ def safe_write_json(path, data):
             time.sleep(0.1)
     return False
 
+log_lock = threading.Lock()
 def log_to_file(msg):
+    """Lightweight logging with thread lock and file size limit"""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_msg = f"{ts} [INFO] {msg}"
     print(full_msg)
     for _ in range(5):
         try:
-            with open(LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(full_msg + "\n")
+            with log_lock:
+                # Keep log file under 2MB to save disk I/O on Raspberry Pi
+                if LOG_PATH.exists() and LOG_PATH.stat().st_size > 2 * 1024 * 1024:
+                    # Truncate to last 500 lines
+                    with open(LOG_PATH, "r", encoding="utf-8") as f:
+                        lines = f.readlines()[-500:]
+                    with open(LOG_PATH, "w", encoding="utf-8") as f:
+                        f.writelines(lines)
+                
+                with open(LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(full_msg + "\n")
             return
         except PermissionError:
             time.sleep(0.1)
@@ -666,9 +643,12 @@ def get_current_5min_ts():
 # ── Bot Loop ──────────────────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info
-    log_to_file("🚀 ENGINE v4.0 (Multi-Strategy 70%+ Accuracy) STARTING...")
+    log_to_file("🚀 ENGINE v4.0 (Lightweight) STARTING...")
 
     market_baselines = {}
+    last_signal_check = 0
+    last_market_fetch = 0
+    cached_market = None
 
     while bot_running:
         try:
@@ -679,9 +659,16 @@ def bot_loop():
             time_remaining = 300 - window_offset
             slug = f"btc-updown-5m-{window_ts}"
 
-            market = get_polymarket_market(slug)
+            # Fetch market data every 30s (reduced from every 1s)
+            if now - last_market_fetch > 30:
+                market = get_polymarket_market(slug)
+                last_market_fetch = now
+                cached_market = market
+            else:
+                market = cached_market
+
             if not market:
-                current_strategy_info["status"] = f"SCANNING..."
+                current_strategy_info["status"] = "SCANNING..."
                 time.sleep(5)
                 continue
 
@@ -697,7 +684,7 @@ def bot_loop():
             up_price = float(outcomes[0])
             down_price = float(outcomes[1])
 
-            # Baseline Sync
+            # Baseline Sync (only once per window)
             if window_ts not in market_baselines:
                 line = get_price_to_beat(window_ts, market.get("conditionId"))
                 market_baselines[window_ts] = line
@@ -705,7 +692,7 @@ def bot_loop():
 
             price_to_beat = market_baselines[window_ts]
 
-            # 3. Initialize Live Client if needed
+            # Initialize Live Client if needed (only once)
             client = None
             if not cfg.get("dry_run", True):
                 try:
@@ -713,12 +700,11 @@ def bot_loop():
                     pk = os.getenv("POLY_PRIVATE_KEY")
                     addr = os.getenv("POLY_WALLET_ADDRESS")
 
-                    # Refresh Balance & P&L every 2 minutes (fresher data)
+                    # Refresh Balance every 2 minutes
                     if addr and (time.time() - account_stats["last_updated"] > 120):
                         threading.Thread(target=fetch_account_stats, args=(addr,), daemon=True).start()
 
                     if pk and addr:
-                        # Use existing credentials if provided, otherwise derive them
                         api_key = os.getenv("POLY_API_KEY")
                         api_secret = os.getenv("POLY_API_SECRET")
                         api_passphrase = os.getenv("POLY_API_PASSPHRASE")
@@ -727,10 +713,8 @@ def bot_loop():
                             from py_clob_client.clob_types import ApiCreds
                             creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_passphrase)
                         else:
-                            # Derive API Credentials
                             temp_client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137)
                             creds = temp_client.create_or_derive_api_creds()
-                        # Use signature_type=1 (POLY_PROXY) because the funder is a Proxy wallet
                         client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=1, funder=addr)
                 except Exception as e:
                     log_to_file(f"⚠️ Live Client Init Error: {e}")
@@ -739,28 +723,30 @@ def bot_loop():
             already_traded = any(t.get("window_ts") == window_ts for t in trades)
 
             if already_traded:
-                # Bypass signal analysis to save resources
                 current_strategy_info = {
                     "slug": slug, "price_to_beat": price_to_beat, "current_diff": 0,
-                    "time_remaining": 300 - window_offset, "up_price": up_price, "down_price": down_price,
+                    "time_remaining": time_remaining, "up_price": up_price, "down_price": down_price,
                     "edge": "None", "status": "Waiting for Result... ⏳", "confidence": 0, "signals": {}
                 }
             else:
-                # 4. Run Signal Engine
-                direction, confidence, signals = analyze_signals(price_to_beat)
+                # Run signal check every 15s (reduced from every 1s)
+                if now - last_signal_check >= SIGNAL_CHECK_INTERVAL:
+                    last_signal_check = now
+                    
+                    direction, confidence, signals = analyze_signals(price_to_beat)
 
-                with price_lock: price_now = last_btc_price
+                    with price_lock: price_now = last_btc_price
 
-                # Heartbeat log every minute
-                if int(now) % 60 == 0:
-                    log_to_file(f"🤖 BTC: ${price_now} | Target: ${price_to_beat} | Conf: {confidence}% | Remaining: {time_remaining}s")
-                diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
+                    # Heartbeat log every minute
+                    if int(now) % 60 == 0:
+                        log_to_file(f"🤖 BTC: ${price_now} | Target: ${price_to_beat} | Conf: {confidence}% | Remaining: {time_remaining}s")
+                    diff = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
 
-                current_strategy_info = {
-                    "slug": slug, "price_to_beat": price_to_beat, "current_diff": round(diff, 3),
-                    "time_remaining": time_remaining, "up_price": up_price, "down_price": down_price,
-                    "edge": "Multi-Strategy v4.0", "status": "Analyzing", "confidence": confidence, "signals": signals
-                }
+                    current_strategy_info = {
+                        "slug": slug, "price_to_beat": price_to_beat, "current_diff": round(diff, 3),
+                        "time_remaining": time_remaining, "up_price": up_price, "down_price": down_price,
+                        "edge": "Multi-Strategy v4.0", "status": "Analyzing", "confidence": confidence, "signals": signals
+                    }
 
                 # 5. IMPROVED Entry Timing - Two-Phase Strategy
                 # Based on research of profitable Polymarket bots:
