@@ -1,7 +1,7 @@
 {
     "dry_run": true,
     "bet_size": 1.0,
-    "min_confidence": 75,
+    "min_confidence": 60,
     "max_trades_per_hour": 12,
     "strategy_version": "4.0"
 }

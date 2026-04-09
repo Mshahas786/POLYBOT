@@ -546,13 +546,16 @@ def analyze_signals(price_to_beat):
     direction = "UP" if votes_up > votes_down else "DOWN"
     confidence = max(votes_up, votes_down) / total_weight * 100
     
-    # ── Confidence Threshold (configurable, default 65%) ──
-    # Load from config.json if available, otherwise use 65% default
+    # ── Confidence Threshold (configurable, default 60%) ──
+    # Load from config.json if available, otherwise use 60% default
     try:
         _cfg = safe_read_json(CONFIG_PATH) or {}
-        _min_conf = float(_cfg.get("min_confidence", 65))
+        _min_conf = float(_cfg.get("min_confidence", 60))
     except:
-        _min_conf = 65
+        _min_conf = 60
+    
+    # Log raw confidence before threshold check (for debugging)
+    _raw_conf = confidence
     
     if confidence < _min_conf:
         confidence = 0
