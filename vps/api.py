@@ -716,12 +716,15 @@ def bot_loop():
 
             # Run Market Making Strategy
             if strategy == "market_making":
+                # Update time_remaining for dashboard
+                current_strategy_info["time_remaining"] = time_remaining
+                current_strategy_info["up_price"] = up_price
+                current_strategy_info["down_price"] = down_price
+                
                 # Run MM every 60 seconds
                 if now - last_mm_run >= 60:
                     last_mm_run = now
                     current_strategy_info["status"] = "MM: Capturing Spread"
-                    current_strategy_info["up_price"] = up_price
-                    current_strategy_info["down_price"] = down_price
                     current_strategy_info["edge"] = f"Spread: {abs(up_price - down_price):.3f}"
                     
                     market_make_loop(client, market, cfg)
@@ -1284,6 +1287,16 @@ def stop_bot():
     global bot_running
     bot_running = False
     return jsonify({"status": "stopped"})
+
+@app.route("/restart", methods=["POST"])
+def restart_bot():
+    global bot_running, bot_thread
+    bot_running = False
+    time.sleep(1)
+    bot_running = True
+    bot_thread = threading.Thread(target=bot_loop, daemon=True)
+    bot_thread.start()
+    return jsonify({"status": "restarted"})
 
 @app.route("/config", methods=["GET", "POST"])
 def handle_config():
