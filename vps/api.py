@@ -643,12 +643,12 @@ def get_current_5min_ts():
 # ── Bot Loop ──────────────────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info
-    log_to_file("🚀 ENGINE v4.0 (Lightweight) STARTING...")
+    log_to_file("🚀 ENGINE v4.0 (Market Making) STARTING...")
 
     market_baselines = {}
-    last_signal_check = 0
     last_market_fetch = 0
     cached_market = None
+    last_mm_run = 0
 
     while bot_running:
         try:
@@ -658,8 +658,11 @@ def bot_loop():
             window_offset = int(now % 300)
             time_remaining = 300 - window_offset
             slug = f"btc-updown-5m-{window_ts}"
+            
+            # Check which strategy to run
+            strategy = cfg.get("strategy", "directional")
 
-            # Fetch market data every 30s (reduced from every 1s)
+            # Fetch market data every 30s
             if now - last_market_fetch > 30:
                 market = get_polymarket_market(slug)
                 last_market_fetch = now
@@ -684,15 +687,7 @@ def bot_loop():
             up_price = float(outcomes[0])
             down_price = float(outcomes[1])
 
-            # Baseline Sync (only once per window)
-            if window_ts not in market_baselines:
-                line = get_price_to_beat(window_ts, market.get("conditionId"))
-                market_baselines[window_ts] = line
-                log_to_file(f"🎯 Baseline Synced: ${line}")
-
-            price_to_beat = market_baselines[window_ts]
-
-            # Initialize Live Client if needed (only once)
+            # Initialize Live Client if needed
             client = None
             if not cfg.get("dry_run", True):
                 try:
@@ -718,6 +713,36 @@ def bot_loop():
                         client = ClobClient("https://clob.polymarket.com", key=pk, chain_id=137, creds=creds, signature_type=1, funder=addr)
                 except Exception as e:
                     log_to_file(f"⚠️ Live Client Init Error: {e}")
+
+            # Run Market Making Strategy
+            if strategy == "market_making":
+                # Run MM every 60 seconds
+                if now - last_mm_run >= 60:
+                    last_mm_run = now
+                    current_strategy_info["status"] = "MM: Capturing Spread"
+                    current_strategy_info["up_price"] = up_price
+                    current_strategy_info["down_price"] = down_price
+                    current_strategy_info["edge"] = f"Spread: {abs(up_price - down_price):.3f}"
+                    
+                    market_make_loop(client, market, cfg)
+                    
+                    # Update dashboard with MM stats
+                    current_strategy_info["mm_fills"] = active_mm_orders.get("fills", 0)
+                    current_strategy_info["mm_profit"] = round(active_mm_orders.get("profit", 0), 2)
+                    current_strategy_info["mm_spread"] = active_mm_orders.get("last_spread", 0)
+                
+                time.sleep(1)
+                continue
+            
+            # Run Directional Strategy (original code)
+            else:
+                # Baseline Sync (only once per window)
+                if window_ts not in market_baselines:
+                    line = get_price_to_beat(window_ts, market.get("conditionId"))
+                    market_baselines[window_ts] = line
+                    log_to_file(f"🎯 Baseline Synced: ${line}")
+
+                price_to_beat = market_baselines[window_ts]
 
             trades = safe_read_json(TRADES_PATH) or []
             already_traded = any(t.get("window_ts") == window_ts for t in trades)
@@ -1046,19 +1071,155 @@ def mark_position_as_redeemed(condition_id):
     """Mark a position as redeemed in the local trades.json file."""
     if not condition_id:
         return
-    
+
     trades = safe_read_json(TRADES_PATH) or []
     updated = False
-    
+
     for trade in trades:
         if trade.get("condition_id") == condition_id and trade.get("outcome") == "win" and not trade.get("redeemed"):
             trade["redeemed"] = True
             trade["redeemed_at"] = datetime.now(timezone.utc).isoformat()
             updated = True
-    
+
     if updated:
         safe_write_json(TRADES_PATH, trades)
         log_to_file(f"📝 Marked condition {condition_id[:10]}... as redeemed in local records")
+
+# ── Market Making Strategy ────────────────────────────────
+active_mm_orders = {"buy_order_id": None, "sell_order_id": None, "last_spread": 0, "fills": 0, "profit": 0}
+
+def market_make_loop(client, market, cfg):
+    """
+    Market Making Strategy: Place buy and sell limit orders to capture spread
+    - Buy below current bid
+    - Sell above current ask
+    - Profit from bid-ask spread
+    - No directional prediction needed
+    """
+    global active_mm_orders
+    
+    tokens = market.get("tokens", [])
+    clob_ids = market.get("clobTokenIds", "[]")
+    if isinstance(clob_ids, str):
+        try: clob_ids = json.loads(clob_ids)
+        except: clob_ids = []
+    
+    if len(clob_ids) < 2 or len(tokens) < 2:
+        return
+    
+    up_token_id = clob_ids[0]
+    down_token_id = clob_ids[1]
+    outcomes = market.get("outcomePrices", [])
+    if isinstance(outcomes, str):
+        try: outcomes = json.loads(outcomes)
+        except: outcomes = []
+    
+    if len(outcomes) < 2:
+        return
+    
+    up_price = float(outcomes[0])
+    down_price = float(outcomes[1])
+    
+    # Market making: buy the cheaper side, sell the expensive side
+    # Spread = difference between up and down prices
+    mid_price = 0.50  # Theoretical midpoint
+    spread = abs(up_price - down_price)
+    spread_bps = cfg.get("spread_bps", 50)  # Basis points (50 = 0.5%)
+    half_spread = (spread_bps / 10000) / 2
+    
+    # Calculate our bid and ask prices
+    # We want to buy below mid and sell above mid
+    buy_price = max(0.01, mid_price - half_spread)  # Our buy order (we're the buyer)
+    sell_price = min(0.99, mid_price + half_spread)  # Our sell order (we're the seller)
+    
+    bet_size = float(cfg.get("bet_size", 2.0))
+    
+    log_to_file(f"📊 MM: Mid=${mid_price:.3f} | Buy=${buy_price:.3f} | Sell=${sell_price:.3f} | Spread={spread_bps}bps")
+    
+    is_dry = cfg.get("dry_run", True)
+    
+    if is_dry:
+        log_to_file(f"🧪 DRY RUN: Would buy ${bet_size} @ ${buy_price:.3f}, sell ${bet_size} @ ${sell_price:.3f}")
+        active_mm_orders["last_spread"] = spread_bps
+        return
+    
+    # LIVE: Place limit orders
+    from py_clob_client.clob_types import OrderArgs
+    
+    try:
+        # Cancel existing orders first
+        if active_mm_orders["buy_order_id"]:
+            try:
+                client.cancel_order(active_mm_orders["buy_order_id"])
+            except: pass
+        if active_mm_orders["sell_order_id"]:
+            try:
+                client.cancel_order(active_mm_orders["sell_order_id"])
+            except: pass
+        
+        # Determine which token to trade (the one closer to fair value)
+        # We want to buy the UNDERPRICED token and sell the OVERPRICED token
+        if up_price < 0.50:
+            # "Up" is cheap, buy it
+            target_token = up_token_id
+            target_side = "UP"
+        else:
+            # "Down" is cheap, buy it  
+            target_token = down_token_id
+            target_side = "DOWN"
+        
+        # Place BUY order
+        buy_order_args = OrderArgs(
+            token_id=target_token,
+            price=buy_price,
+            size=bet_size,
+            side="BUY"
+        )
+        buy_signed = client.create_order(buy_order_args)
+        buy_resp = client.post_order(buy_signed, OrderType.GTC)
+        
+        if buy_resp and (hasattr(buy_resp, "orderID") or (isinstance(buy_resp, dict) and "orderID" in buy_resp)):
+            buy_id = getattr(buy_resp, "orderID", buy_resp.get("orderID"))
+            active_mm_orders["buy_order_id"] = buy_id
+            log_to_file(f"✅ MM BUY PLACED: ${bet_size} @ ${buy_price:.3f} | OrderID: {buy_id}")
+        
+        # Wait briefly for fill
+        time.sleep(2)
+        
+        # Check if buy filled
+        if active_mm_orders["buy_order_id"]:
+            try:
+                order_status = client.get_order(active_mm_orders["buy_order_id"])
+                status_val = getattr(order_status, "status", "") if hasattr(order_status, "status") else order_status.get("status", "")
+                
+                if status_val == "FILLED" or status_val == "filled":
+                    log_to_file(f"✅ MM BUY FILLED: ${bet_size} @ ${buy_price:.3f}")
+                    active_mm_orders["fills"] += 1
+                    
+                    # Now place SELL order at higher price
+                    sell_order_args = OrderArgs(
+                        token_id=target_token,
+                        price=sell_price,
+                        size=bet_size,
+                        side="SELL"
+                    )
+                    sell_signed = client.create_order(sell_order_args)
+                    sell_resp = client.post_order(sell_signed, OrderType.GTC)
+                    
+                    if sell_resp and (hasattr(sell_resp, "orderID") or (isinstance(sell_resp, dict) and "orderID" in sell_resp)):
+                        sell_id = getattr(sell_resp, "orderID", sell_resp.get("orderID"))
+                        active_mm_orders["sell_order_id"] = sell_id
+                        profit_per_share = sell_price - buy_price
+                        active_mm_orders["profit"] += profit_per_share * bet_size
+                        log_to_file(f"✅ MM SELL PLACED: ${bet_size} @ ${sell_price:.3f} | Profit potential: ${profit_per_share * bet_size:.2f}")
+                    active_mm_orders["buy_order_id"] = None  # Reset buy
+            except Exception as e:
+                log_to_file(f"⚠️ MM order check error: {e}")
+        
+        active_mm_orders["last_spread"] = spread_bps
+        
+    except Exception as e:
+        log_to_file(f"⚠️ MM order placement error: {e}")
 
 # ── API Routes ─────────────────────────────────────────────
 
