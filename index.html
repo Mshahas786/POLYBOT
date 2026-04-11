@@ -4,9 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PolyBot">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
     <title>PolyBot Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
@@ -1348,14 +1351,6 @@
                     if (latest.direction === 'UP') { badge.className = 'signal-badge up'; badge.textContent = '▲ UP'; }
                     else if (latest.direction === 'DOWN') { badge.className = 'signal-badge down'; badge.textContent = '▼ DOWN'; }
                     else { badge.className = 'signal-badge skip'; badge.textContent = '⏸ SKIP'; }
-                }
-
-                // Show MM status if active
-                const info = statusData?.info;
-                if (info?.mm_fills !== undefined) {
-                    const badge = document.getElementById('signalBadge');
-                    badge.className = 'signal-badge up';
-                    badge.textContent = `📊 MM: ${info.mm_fills} fills`;
                 }
             } catch (e) { console.error('Trades error:', e); }
         }
