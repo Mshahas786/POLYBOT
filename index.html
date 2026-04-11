@@ -962,19 +962,39 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value green" id="statBalance">$0.00</div>
-                <div class="stat-label">EST. PROFIT</div>
+                <div class="stat-label" id="profitLabel">EST. PROFIT</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="statPnl">0.0x</div>
-                <div class="stat-label">RISK RATIO</div>
+                <div class="stat-label" id="pnlLabel">RISK RATIO</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value green" id="statSuccess">--</div>
-                <div class="stat-label">WIN RATE %</div>
+                <div class="stat-label" id="winRateLabel">WIN RATE %</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value blue" id="statTotal">--</div>
-                <div class="stat-label">TOTAL TRADES</div>
+                <div class="stat-label" id="tradesLabel">TOTAL TRADES</div>
+            </div>
+        </div>
+
+        <!-- Market Making Stats (hidden by default) -->
+        <div class="stats-grid" id="mmStats" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-value green" id="mmFills">0</div>
+                <div class="stat-label">MM FILLS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value green" id="mmProfit">$0.00</div>
+                <div class="stat-label">MM PROFIT</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value blue" id="mmSpread">0</div>
+                <div class="stat-label">SPREAD (bps)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="mmStrategy">--</div>
+                <div class="stat-label">STRATEGY</div>
             </div>
         </div>
 
@@ -1079,33 +1099,32 @@
                 trades.</div>
             <div class="sep"></div>
             <div class="setting-group">
+                <label class="setting-label">STRATEGY</label>
+                <select class="setting-input" id="strategySelect">
+                    <option value="market_making">Market Making (Capture Spread)</option>
+                    <option value="directional">Directional (Predict UP/DOWN)</option>
+                </select>
+                <div class="setting-hint">MM: Profit from bid-ask spread. Directional: Predict price movement.</div>
+            </div>
+            <div class="setting-group">
                 <label class="setting-label">BET SIZE (USDC)</label>
-                <input class="setting-input" id="betSize" type="number" value="1" min="0.1" step="0.5">
-                <div class="setting-hint">Amount per trade in USDC (Polymarket minimum applies)</div>
+                <input class="setting-input" id="betSize" type="number" value="2" min="0.1" step="0.5">
+                <div class="setting-hint">Amount per trade in USDC</div>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">SPREAD (basis points)</label>
+                <input class="setting-input" id="spreadBps" type="number" value="50" min="10" max="200">
+                <div class="setting-hint">MM only: 50bps = 0.5% spread. Lower = more fills, less profit per trade.</div>
             </div>
             <div class="setting-group">
                 <label class="setting-label">MAX TRADES PER HOUR</label>
-                <input class="setting-input" id="maxTrades" type="number" value="12" min="1" max="30">
+                <input class="setting-input" id="maxTrades" type="number" value="20" min="1" max="50">
+                <div class="setting-hint">MM recommended: 20-30. Directional: 8-12.</div>
             </div>
             <div class="setting-group">
                 <label class="setting-label">MIN CONFIDENCE %</label>
                 <input class="setting-input" id="minConfidence" type="number" value="55" min="10" max="100">
-                <div class="setting-hint">Minimum signal confidence to trade. Recommended: 55-65%</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">ORDER EXECUTION</label>
-                <div class="setting-hint" style="margin-bottom:8px;">Type: FOK (Fill-Or-Kill) with $0.95 cap</div>
-                <div class="setting-hint" style="margin-bottom:8px;">Failed trades auto-retry on next strong signal
-                    (70%+ confidence)</div>
-                <div class="setting-hint" style="margin-bottom:8px;">Single attempt per signal, waits for next
-                    opportunity if fails</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">ENTRY TIMING</label>
-                <div class="setting-hint" style="margin-bottom:8px;">Phase 1: 60-180s (requires 75%+ confidence)</div>
-                <div class="setting-hint" style="margin-bottom:8px;">Phase 2: 180-285s (requires 65%+ confidence)</div>
-                <div class="setting-hint" style="margin-bottom:8px;">Failed trades retry on any 70%+ signal outside
-                    windows</div>
+                <div class="setting-hint">Directional only: Minimum signal confidence. MM ignores this.</div>
             </div>
             <button class="save-btn" onclick="saveStrategySettings()">SAVE STRATEGY</button>
         </div>
@@ -1121,11 +1140,11 @@
             <div
                 style="font-size: 11px; color: var(--muted); line-height: 2; font-family: 'JetBrains Mono', monospace;">
                 <div>Bot: PolyBot v4.0</div>
-                <div>Strategy: Multi-Signal (SMA+RSI+MACD+BB+Momentum+VWAP+LastSec)</div>
-                <div>Order Type: FOK (Fill-Or-Kill) @ $0.95 cap</div>
+                <div>Strategy: Market Making (capture spread) / Directional</div>
+                <div>MM: Buy cheap, sell expensive, profit from bid-ask gap</div>
+                <div>Order Type: GTC Limit Orders @ configurable spread</div>
                 <div>Market: BTC Up/Down 5-Min</div>
-                <div>Entry: Phase 1 (60-180s @75%+), Phase 2 (180-285s @65%+)</div>
-                <div>Retry: Failed trades retry on next 70%+ signal</div>
+                <div>Win Rate Target: 65-75% (MM), 55-65% (Directional)</div>
             </div>
         </div>
     </div>
@@ -1201,24 +1220,40 @@
                 modeBanner.innerHTML = '💰 LIVE TRADING — Real orders are being placed';
             }
 
-            // Calculate stats from trade results (API balance returns 0 locally)
-            const wins = data.wins || 0;
-            const losses = data.losses || 0;
-            const total = data.total_trades || 0;
-            const bSize = data.bet_size || 2;
+            // Detect strategy type
+            const strategy = data.info?.edge?.startsWith('Spread:') ? 'market_making' : 'directional';
+            const isMM = strategy === 'market_making';
 
-            // Est. profit: win = betSize * 0.9, loss = -betSize
-            const estProfit = (wins * bSize * 0.9) - (losses * bSize);
-            document.getElementById('statBalance').textContent = (estProfit >= 0 ? '+' : '-') + '$' + Math.abs(estProfit).toFixed(2);
-            document.getElementById('statBalance').className = 'stat-value ' + (estProfit >= 0 ? 'green' : 'red');
+            // Show/hide stats grids based on strategy
+            document.querySelector('.stats-grid').style.display = isMM ? 'none' : 'grid';
+            document.getElementById('mmStats').style.display = isMM ? 'grid' : 'none';
 
-            // Risk ratio: avg win / avg loss
-            const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
-            document.getElementById('statPnl').textContent = riskRatio + 'x';
-            document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
+            if (isMM) {
+                // Market Making stats
+                document.getElementById('mmFills').textContent = data.info.mm_fills || 0;
+                document.getElementById('mmProfit').textContent = '$' + (data.info.mm_profit || 0).toFixed(2);
+                document.getElementById('mmSpread').textContent = data.info.mm_spread || 0;
+                document.getElementById('mmStrategy').textContent = 'MM';
+            } else {
+                // Directional stats
+                const wins = data.wins || 0;
+                const losses = data.losses || 0;
+                const total = data.total_trades || 0;
+                const bSize = data.bet_size || 2;
 
-            document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-            document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+                // Est. profit: win = betSize * 0.9, loss = -betSize
+                const estProfit = (wins * bSize * 0.9) - (losses * bSize);
+                document.getElementById('statBalance').textContent = (estProfit >= 0 ? '+' : '-') + '$' + Math.abs(estProfit).toFixed(2);
+                document.getElementById('statBalance').className = 'stat-value ' + (estProfit >= 0 ? 'green' : 'red');
+
+                // Risk ratio: avg win / avg loss
+                const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
+                document.getElementById('statPnl').textContent = riskRatio + 'x';
+                document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
+
+                document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
+                document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+            }
 
             // Update 5-min window display
             updateWindowTimer(data.info);
@@ -1314,6 +1349,14 @@
                     else if (latest.direction === 'DOWN') { badge.className = 'signal-badge down'; badge.textContent = '▼ DOWN'; }
                     else { badge.className = 'signal-badge skip'; badge.textContent = '⏸ SKIP'; }
                 }
+
+                // Show MM status if active
+                const info = statusData?.info;
+                if (info?.mm_fills !== undefined) {
+                    const badge = document.getElementById('signalBadge');
+                    badge.className = 'signal-badge up';
+                    badge.textContent = `📊 MM: ${info.mm_fills} fills`;
+                }
             } catch (e) { console.error('Trades error:', e); }
         }
 
@@ -1406,8 +1449,10 @@
         async function saveStrategySettings() {
             const cfg = {
                 dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
-                bet_size: parseFloat(document.getElementById('betSize').value) || 1,
-                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 12,
+                strategy: document.getElementById('strategySelect').value || 'market_making',
+                bet_size: parseFloat(document.getElementById('betSize').value) || 2,
+                spread_bps: parseInt(document.getElementById('spreadBps').value) || 50,
+                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 20,
                 min_confidence: parseInt(document.getElementById('minConfidence').value) || 55,
             };
             try {
