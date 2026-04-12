@@ -30,7 +30,15 @@ LOG_BUFFER_SIZE = 500  # Max log entries to keep in memory
 
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# Add CORS headers to all responses
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
 
 # ── Paths ──────────────────────────────────────────────────
 # Use the current directory (vps folder) for all production data to ensure consistency across environments
