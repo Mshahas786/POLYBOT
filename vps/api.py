@@ -720,12 +720,13 @@ def bot_loop():
                 current_strategy_info["time_remaining"] = time_remaining
                 current_strategy_info["up_price"] = up_price
                 current_strategy_info["down_price"] = down_price
+                current_strategy_info["status"] = f"MM: {time_remaining//60}:{time_remaining%60:02d} left"
+                current_strategy_info["edge"] = f"Spread: {abs(up_price - down_price):.3f}"
                 
-                # Run MM every 60 seconds
+                # Log MM status every 60 seconds
                 if now - last_mm_run >= 60:
                     last_mm_run = now
-                    current_strategy_info["status"] = "MM: Capturing Spread"
-                    current_strategy_info["edge"] = f"Spread: {abs(up_price - down_price):.3f}"
+                    log_to_file(f"📊 MM Cycle: Up=${up_price:.3f} Down=${down_price:.3f} Spread={abs(up_price-down_price):.3f}")
                     
                     market_make_loop(client, market, cfg)
                     
