@@ -657,6 +657,7 @@ def bot_loop():
     last_market_fetch = 0
     cached_market = None
     last_mm_run = 0
+    last_signal_check = 0
 
     while bot_running:
         try:
