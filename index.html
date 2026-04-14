@@ -1481,7 +1481,6 @@
                             <div>Market: ${slug || 'N/A'}</div>
                             <div>Window: ${trade.window_ts ? new Date(trade.window_ts * 1000).toLocaleString() : 'N/A'}</div>
                             <div>Order ID: ${trade.order_id || 'N/A'}</div>
-                            <div>Redeemed: ${trade.redeemed ? '✅ Yes' : '❌ No'}</div>
                             ${trade.price_to_beat ? `<div>Strike Price: $${parseFloat(trade.price_to_beat).toLocaleString()}</div>` : ''}
                             ${trade.resolve_price ? `<div>Resolve Price: $${parseFloat(trade.resolve_price).toLocaleString()}</div>` : ''}
                         </div>
@@ -1565,23 +1564,6 @@
         function setupAutoRefresh(interval) {
             if (autoRefreshTimer) clearInterval(autoRefreshTimer);
             if (interval > 0) autoRefreshTimer = setInterval(fetchAll, interval);
-        }
-
-        async function triggerRedeem() {
-            const btn = document.getElementById('redeemBtn');
-            const origText = btn.textContent;
-            try {
-                btn.textContent = '⏳ Triggering Redemption...';
-                btn.disabled = true;
-                const resp = await fetch(VPS_URL + '/redeem', { method: 'POST' });
-                const data = await resp.json();
-                if (data.status === 'redemption_triggered') {
-                    showToast('✅ Redemption started! Check logs for status.', 'success');
-                } else {
-                    showToast('⚠️ ' + (data.message || 'Check logs'), '');
-                }
-            } catch (e) { showToast('❌ Failed: ' + e.message, 'error'); }
-            finally { setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 3000); }
         }
 
         fetchAll();

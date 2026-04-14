@@ -525,101 +525,6 @@ def check_outcomes(baselines):
             bot_running = False
             log_to_file(f"🛑 AUTO-STOP: Win rate {wr:.1f}% < 45% after {total} trades. Review config.")
 
-# ── Redemption (FIXED - actually works now) ───────────────
-def redeem_all_winners():
-    """
-    Claim all winning positions via the Polymarket relayer.
-    Uses the py_clob_client's redeem functionality.
-    """
-    load_dotenv(ENV_PATH)
-    pk = os.getenv("POLY_PRIVATE_KEY")
-    addr = os.getenv("POLY_WALLET_ADDRESS")
-    
-    if not pk or not addr:
-        log_to_file("⚠️ Redemption: Missing POLY_PRIVATE_KEY or POLY_WALLET_ADDRESS")
-        return
-    
-    trades = safe_read_json(TRADES_PATH) or []
-    unredeemed_wins = [
-        t for t in trades
-        if t.get("outcome") == "win"
-        and not t.get("redeemed")
-        and t.get("condition_id")
-    ]
-    
-    if not unredeemed_wins:
-        log_to_file("🔄 Redemption: No unredeemed wins found")
-        return
-    
-    log_to_file(f"💰 Redemption: Found {len(unredeemed_wins)} unredeemed wins - processing...")
-    
-    try:
-        from py_clob_client.client import ClobClient
-        from py_clob_client.clob_types import ApiCreds
-        
-        api_key = os.getenv("POLY_API_KEY")
-        api_secret = os.getenv("POLY_API_SECRET")
-        api_passphrase = os.getenv("POLY_API_PASSPHRASE")
-        
-        if api_key and api_secret and api_passphrase:
-            creds = ApiCreds(
-                api_key=api_key,
-                api_secret=api_secret,
-                api_passphrase=api_passphrase
-            )
-        else:
-            temp = ClobClient("https://clob.polymarket.com", key=pk, chain_id=CHAIN_ID)
-            creds = temp.create_or_derive_api_creds()
-        
-        client = ClobClient(
-            "https://clob.polymarket.com",
-            key=pk,
-            chain_id=CHAIN_ID,
-            creds=creds,
-            signature_type=1,
-            funder=addr
-        )
-
-        redeemed_conditions = set()
-        for trade in unredeemed_wins:
-            cid = trade.get("condition_id")
-            if cid in redeemed_conditions:
-                continue
-            try:
-                # Use ClobClient's proper redeem method (handles auth/signing internally)
-                resp = client.redeem_winnings(condition_id=cid)
-                if resp and (hasattr(resp, "transactionHash") or
-                             (isinstance(resp, dict) and "transactionHash" in resp) or
-                             isinstance(resp, str) and resp.startswith("0x")):
-                    log_to_file(f"✅ Redeemed condition {cid[:12]}...")
-                    redeemed_conditions.add(cid)
-                    # Mark all matching trades as redeemed
-                    for t2 in trades:
-                        if t2.get("condition_id") == cid:
-                            t2["redeemed"] = True
-                            t2["redeemed_at"] = datetime.now(timezone.utc).isoformat()
-                else:
-                    log_to_file(f"⚠️ Redeem failed {cid[:12]}: response={resp}")
-            except Exception as e:
-                err_msg = str(e)
-                if "already redeemed" in err_msg.lower() or "no position" in err_msg.lower():
-                    log_to_file(f"ℹ️ Redeem skipped {cid[:12]}: {err_msg[:80]}")
-                    redeemed_conditions.add(cid)
-                    for t2 in trades:
-                        if t2.get("condition_id") == cid:
-                            t2["redeemed"] = True
-                            t2["redeemed_at"] = datetime.now(timezone.utc).isoformat()
-                else:
-                    log_to_file(f"⚠️ Redeem error {cid[:12]}: {err_msg[:120]}")
-        
-        safe_write_json(TRADES_PATH, trades)
-        log_to_file(f"💰 Redemption complete: {len(redeemed_conditions)} conditions processed")
-    
-    except ImportError:
-        log_to_file("⚠️ py_clob_client not available for redemption")
-    except Exception as e:
-        log_to_file(f"⚠️ Redemption error: {e}")
-
 # ── Trade Execution ────────────────────────────────────────
 def execute_trade(direction, token_id, token_price, btc_price, slug,
                   window_ts, confidence, signals, cfg, client=None, market=None, price_to_beat=0):
@@ -645,9 +550,8 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                 if current_balance < bet_size:
                     log_to_file(
                         f"⚠️ BALANCE: Need ${bet_size:.2f}, have ${current_balance:.2f}. "
-                        f"Triggering redemption..."
+                        f"Insufficient funds."
                     )
-                    threading.Thread(target=redeem_all_winners, daemon=True).start()
                     return
             except Exception as be:
                 log_to_file(f"⚠️ Balance check failed: {be}")
@@ -697,8 +601,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
         "dry_run": is_dry,
         "status": status,
         "outcome": None,
-        "condition_id": condition_id,
-        "redeemed": False
+        "condition_id": condition_id
     }
 
     if is_dry:
@@ -734,7 +637,6 @@ def bot_loop():
     last_market_fetch = 0
     cached_market = None
     last_signal_check = 0
-    last_redeem_check = time.time()
     last_outcome_check = time.time()
 
     # H1 FIX: Cache the ClobClient so it's only created once per session
@@ -756,10 +658,6 @@ def bot_loop():
                     target=check_outcomes, args=(dict(market_baselines),), daemon=True
                 ).start()
                 last_outcome_check = now
-
-            if now - last_redeem_check > 600:  # Every 10 minutes
-                threading.Thread(target=redeem_all_winners, daemon=True).start()
-                last_redeem_check = now
 
             # Fetch market data every 30s
             if now - last_market_fetch > 30:
@@ -1085,11 +983,6 @@ def handle_config():
         safe_write_json(CONFIG_PATH, data)
         return jsonify({"status": "saved"})
     return jsonify(safe_read_json(CONFIG_PATH) or {})
-
-@app.route("/redeem", methods=["POST"])
-def trigger_redeem():
-    threading.Thread(target=redeem_all_winners, daemon=True).start()
-    return jsonify({"status": "redemption_triggered"})
 
 @app.route("/logs")
 def get_logs():

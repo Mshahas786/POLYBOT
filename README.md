@@ -7,7 +7,7 @@
 - **8-Signal Multi-Strategy Engine** — SMA, RSI, MACD, Bollinger Bands, Momentum, VWAP, Last-Second Snipe
 - **Adaptive Signal Weighting** — Volatility regime detection adjusts indicator importance
 - **Two-Phase Entry Timing** — Early (60-180s @ 75%+) and Late (180-285s @ 65%+) entry windows
-- **Auto-Redeem** — Automatically claims winnings every 10 minutes via Polymarket relayer (FIXED in v4.0)
+- **Auto-Redeem** — Manually claim winnings via the Polymarket dashboard
 - **Accurate Win Rate Tracking** — Fixed double-counting bug for reliable performance metrics
 - **Live & Dry Run Modes** — Test strategies risk-free before going live
 - **Real-Time Dashboard** — Web UI with trade history, P&L tracking, and analytics
@@ -118,17 +118,7 @@ Open the Cloudflare tunnel URL shown in the terminal (e.g., `https://xxxx.tryclo
 - **Trade Analysis** — Best/Worst trade, Avg Win/Loss, Win/Loss streaks
 - **Performance Chart** — Visual win/loss distribution
 - **Trade History** — Click any trade to expand full details
-- **Settings Panel** — Adjust strategy, trigger manual redemption
-
-## 🔄 Auto-Redeem
-
-The bot automatically claims winning positions every 10 minutes via the Polymarket relayer (gas fees covered by relayer).
-
-**Manual trigger:** Settings → "CLAIM ALL WINNINGS" button
-
-**Requirements for auto-redeem:**
-- `POLY_BUILDER_API_KEY`, `POLY_BUILDER_SECRET`, `POLY_BUILDER_PASSPHRASE` in `.env`
-- Obtain these from Polymarket → Settings → API Keys
+- **Settings Panel** — Adjust bet size, confidence threshold, and trade limits
 
 ## 📈 Strategy Explained
 
@@ -186,7 +176,7 @@ ssh user@your-vps "cd ~/polybot && bash setup.sh"
 
 - **Bot logs:** `~/polybot/bot.log`
 - **API status:** `http://127.0.0.1:3000/status`
-- **Manual redeem:** `POST http://127.0.0.1:3000/redeem`
+- **API stats:** `http://127.0.0.1:3000/stats`
 
 ## ⚠️ Risk Disclaimer
 
