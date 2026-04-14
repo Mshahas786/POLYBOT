@@ -558,9 +558,8 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
             log_to_file(f"🎯 LIVE ORDER: {direction} ${bet_size} @ ${token_price:.3f}")
 
-            # Round to 0.01 tick size — pass as MarketOrderArgs.price so
-            # create_market_order uses our exact value instead of computing
-            # an unrounded midpoint that breaks Polymarket's tick rule
+            # GTC fills whatever liquidity exists; FOK always fails on thin books
+            # We cancel remaining unfilled portion after 2s to avoid stale orders
             from py_clob_client.clob_types import MarketOrderArgs
             capped_price = round(min(token_price + 0.10, 0.85), 2)
             order_args = MarketOrderArgs(
@@ -570,13 +569,26 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                 price=capped_price,
             )
             signed_order = client.create_market_order(order_args)
-            resp = client.post_order(signed_order, OrderType.FOK)
+            resp = client.post_order(signed_order, OrderType.GTC)
 
             if resp and (hasattr(resp, "orderID") or
                          (isinstance(resp, dict) and "orderID" in resp)):
                 order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
                 status = "placed"
-                log_to_file(f"✅ ORDER PLACED: {direction} | ID: {order_id}")
+                log_to_file(f"✅ ORDER PLACED (GTC): {direction} | ID: {order_id}")
+                
+                # Cancel remaining unfilled portion after 2s to avoid stale orders
+                # on the book when the 5-min window closes
+                def cancel_remain():
+                    try:
+                        time.sleep(2)
+                        cancel_resp = client.cancel(order_id)
+                        if cancel_resp:
+                            log_to_file(f"🚫 Cancelled remaining order {order_id[:12]}...")
+                    except Exception as ce:
+                        log_to_file(f"⚠️ Cancel failed for {order_id[:12]}: {ce}")
+                
+                threading.Thread(target=cancel_remain, daemon=True).start()
             else:
                 status = "failed"
                 log_to_file(f"⚠️ Order failed: {resp}")
