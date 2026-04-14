@@ -654,8 +654,8 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
             log_to_file(f"🎯 LIVE ORDER: {direction} ${bet_size} @ ${token_price:.3f}")
 
-            # Widen cap to $0.85 to ensure FOK fills on thin 5-min order books
-            capped_price = min(token_price + 0.10, 0.85)
+            # Widen cap to $0.85, round to 0.01 tick size (Polymarket requirement)
+            capped_price = round(min(token_price + 0.10, 0.85), 2)
 
             order_args = MarketOrderArgs(
                 token_id=token_id,
