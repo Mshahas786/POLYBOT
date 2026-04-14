@@ -1141,7 +1141,7 @@
             <div class="card-title">ABOUT</div>
             <div
                 style="font-size: 11px; color: var(--muted); line-height: 2; font-family: 'JetBrains Mono', monospace;">
-                <div>Bot: PolyBot v4.0</div>
+                <div>Bot: PolyBot v5.0 (Odds-Edge)</div>
                 <div>Strategy: Market Making (capture spread) / Directional</div>
                 <div>MM: Buy cheap, sell expensive, profit from bid-ask gap</div>
                 <div>Order Type: GTC Limit Orders @ configurable spread</div>
@@ -1222,59 +1222,47 @@
                 modeBanner.innerHTML = '💰 LIVE TRADING — Real orders are being placed';
             }
 
-            // Detect strategy type
-            const strategy = data.info?.edge?.startsWith('Spread:') ? 'market_making' : 'directional';
-            const isMM = strategy === 'market_making';
+            // H7 FIX: v5.0 is odds-edge directional only — no market making mode
+            // Always show directional stats, hide dead MM grid
+            document.getElementById('mmStats').style.display = 'none';
 
-            // Show/hide stats grids based on strategy
-            document.querySelector('.stats-grid').style.display = isMM ? 'none' : 'grid';
-            document.getElementById('mmStats').style.display = isMM ? 'grid' : 'none';
+            // Directional stats
+            const wins = data.wins || 0;
+            const losses = data.losses || 0;
+            const total = data.total_trades || 0;
+            const bSize = data.bet_size || 2;
 
-            if (isMM) {
-                // Market Making stats
-                document.getElementById('mmFills').textContent = data.info.mm_fills || 0;
-                document.getElementById('mmProfit').textContent = '$' + (data.info.mm_profit || 0).toFixed(2);
-                document.getElementById('mmSpread').textContent = data.info.mm_spread || 0;
-                document.getElementById('mmStrategy').textContent = 'MM';
-            } else {
-                // Directional stats
-                const wins = data.wins || 0;
-                const losses = data.losses || 0;
-                const total = data.total_trades || 0;
-                const bSize = data.bet_size || 2;
+            // Est. profit: win = betSize * 0.9, loss = -betSize
+            const estProfit = (wins * bSize * 0.9) - (losses * bSize);
+            document.getElementById('statBalance').textContent = (estProfit >= 0 ? '+' : '-') + '$' + Math.abs(estProfit).toFixed(2);
+            document.getElementById('statBalance').className = 'stat-value ' + (estProfit >= 0 ? 'green' : 'red');
 
-                // Est. profit: win = betSize * 0.9, loss = -betSize
-                const estProfit = (wins * bSize * 0.9) - (losses * bSize);
-                document.getElementById('statBalance').textContent = (estProfit >= 0 ? '+' : '-') + '$' + Math.abs(estProfit).toFixed(2);
-                document.getElementById('statBalance').className = 'stat-value ' + (estProfit >= 0 ? 'green' : 'red');
+            // Risk ratio: avg win / avg loss
+            const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
+            document.getElementById('statPnl').textContent = riskRatio + 'x';
+            document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
 
-                // Risk ratio: avg win / avg loss
-                const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
-                document.getElementById('statPnl').textContent = riskRatio + 'x';
-                document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
-
-                document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-                document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
-            }
-
-            // Update 5-min window display
-            updateWindowTimer(data.info);
-
-            // BTC Price
-            if (data.btc_price) {
-                document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
-
-            // Button states
-            document.getElementById('btnStart').disabled = data.running;
-            document.getElementById('btnStop').disabled = !data.running;
-
-            // Update settings
-            const toggle = document.getElementById('toggleDryRun');
-            toggle.className = data.dry_run ? 'toggle on' : 'toggle';
-            document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
-            if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
+            document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
+            document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
         }
+
+        // Update 5-min window display
+        updateWindowTimer(data.info);
+
+        // BTC Price
+        if (data.btc_price) {
+            document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Button states
+        document.getElementById('btnStart').disabled = data.running;
+        document.getElementById('btnStop').disabled = !data.running;
+
+        // Update settings
+        const toggle = document.getElementById('toggleDryRun');
+        toggle.className = data.dry_run ? 'toggle on' : 'toggle';
+        document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
+        if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
 
         function updateWindowTimer(info) {
             const card = document.getElementById('windowCard');
@@ -1301,12 +1289,12 @@
             document.getElementById('windowUp').textContent = `UP ${upPct}%`;
             document.getElementById('windowDown').textContent = `DOWN ${downPct}%`;
 
-            // Status based on entry window (150-285s is when bot trades)
+            // H5 FIX: Status based on entry window (120-250s matches backend bot_loop)
             const statusEl = document.getElementById('windowStatus');
-            if (secs > 285) {
+            if (secs > 250) {
                 statusEl.textContent = '⏳ WAITING';
                 statusEl.style.color = 'var(--muted)';
-            } else if (secs >= 150) {
+            } else if (secs >= 120) {
                 statusEl.textContent = '🎯 ENTRY ZONE';
                 statusEl.style.color = 'var(--green)';
             } else {
@@ -1413,7 +1401,8 @@
 
         async function fetchLogs() {
             try {
-                const resp = await fetch(VPS_URL + '/logs?n=200');
+                const resp = await fetch(VPS_URL + '/logs');
+                if (!resp.ok) return;
                 const data = await resp.json();
                 const logs = data.logs || [];
                 document.getElementById('fullLogs').innerHTML = [...logs].reverse().map(formatLog).join('');
@@ -1513,10 +1502,9 @@
                 const cfg = await resp.json();
                 if (cfg) {
                     document.getElementById('betSize').value = cfg.bet_size || 2;
-                    document.getElementById('maxTrades').value = cfg.max_trades_per_hour || 12;
-                    document.getElementById('cooldown').value = cfg.cooldown_seconds || 60;
-                    document.getElementById('minConfidence').value = cfg.min_confidence || 80;
-                    document.getElementById('maxLosses').value = cfg.max_consecutive_losses || 5;
+                    document.getElementById('maxTrades').value = cfg.max_trades_per_hour || 8;
+                    document.getElementById('minConfidence').value = cfg.min_confidence || 55;
+                    // cooldown and maxLosses elements don't exist in this version — skip safely
                 }
             } catch (e) { }
         })();

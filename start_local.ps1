@@ -72,7 +72,7 @@ else {
 # -- Stop Previous Instances --------------------------------
 Write-Host "[4/5] Stopping previous instances..." -ForegroundColor Yellow
 
-Get-WmiObject Win32_Process | Where-Object {
+Get-CimInstance Win32_Process | Where-Object {
     $_.CommandLine -match "api.py" -or $_.CommandLine -match "cloudflared"
 } | ForEach-Object {
     try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}

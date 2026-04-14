@@ -5,15 +5,34 @@ echo "========================================="
 echo "  PolyBot VPS Setup Script"
 echo "========================================="
 
-echo "[1/5] Stopping existing processes..."
+echo "[1/6] Stopping existing processes..."
 pkill -f python3 || true
 pkill -f cloudflared || true
 
-echo "[2/5] Creating bot directory..."
+echo "[2/6] Creating bot directory and copying config..."
 mkdir -p ~/polybot
 cd ~/polybot
 
-echo "[3/5] Checking cloudflared..."
+# Copy config.json if it doesn't exist yet
+if [ ! -f config.json ]; then
+    echo "  Creating default config.json..."
+    cat > config.json << 'CONFIGEOF'
+{
+  "dry_run": true,
+  "strategy": "directional",
+  "bet_size": 2,
+  "spread_bps": 50,
+  "max_trades_per_hour": 8,
+  "min_confidence": 55,
+  "strategy_version": "5.0"
+}
+CONFIGEOF
+    echo "  ✓ config.json created"
+else
+    echo "  ✓ config.json already exists"
+fi
+
+echo "[3/6] Checking cloudflared..."
 if ! command -v cloudflared &> /dev/null; then
     echo "  Downloading cloudflared..."
     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
@@ -24,12 +43,21 @@ else
     echo "  ✓ cloudflared already installed"
 fi
 
-echo "[4/5] Checking Python dependencies..."
-pip install --quiet --upgrade flask flask-cors requests websocket-client python-dotenv py-clob-client eth-abi web3 py-builder-relayer-client py-builder-signing-sdk 2>/dev/null || {
-    echo "  ⚠️ pip install had warnings, continuing..."
-}
+echo "[4/6] Checking Python dependencies..."
+# Use requirements.txt if available, otherwise install core packages
+if [ -f requirements.txt ]; then
+    echo "  Installing from requirements.txt..."
+    pip install --quiet --upgrade -r requirements.txt 2>/dev/null || {
+        echo "  ⚠️ Some packages failed to install, continuing..."
+    }
+else
+    echo "  Installing core packages..."
+    pip install --quiet --upgrade flask flask-cors requests websocket-client python-dotenv py-clob-client eth-abi web3 2>/dev/null || {
+        echo "  ⚠️ pip install had warnings, continuing..."
+    }
+fi
 
-echo "[5/5] Starting services..."
+echo "[5/6] Starting services..."
 cd ~/polybot
 
 # Start ONLY api.py (it includes the bot loop internally)
@@ -60,7 +88,7 @@ sleep 8
 
 echo ""
 echo "========================================="
-echo "  Setup Complete!"
+echo "[6/6] Setup Complete!"
 echo "========================================="
 
 if [ -f cloudflared.log ]; then
