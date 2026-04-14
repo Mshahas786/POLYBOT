@@ -1174,6 +1174,7 @@
         let autoRefreshTimer = null;
         let isDryRun = true;
         let botRunning = false;
+        let currentFilter = 'all';
         document.getElementById('vpsUrl').value = VPS_URL;
 
         function showTab(name, btn) {
@@ -1261,6 +1262,24 @@
 
             document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
             document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+
+            // Update 5-min window display
+            updateWindowTimer(data.info);
+
+            // BTC Price
+            if (data.btc_price) {
+                document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Button states
+            document.getElementById('btnStart').disabled = data.running;
+            document.getElementById('btnStop').disabled = !data.running;
+
+            // Update settings
+            const toggle = document.getElementById('toggleDryRun');
+            toggle.className = data.dry_run ? 'toggle on' : 'toggle';
+            document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
+            if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
         }
 
         // v5.0: Update Signal Analysis Panel
@@ -1273,7 +1292,6 @@
             card.style.display = 'block';
             const s = info.signals;
 
-            // Direction + Confidence
             const dirEl = document.getElementById('sigDirection');
             if (info.confidence > 0 && s.odds_dir) {
                 dirEl.textContent = s.odds_dir === 'UP' ? '▲ UP' : '▼ DOWN';
@@ -1289,36 +1307,27 @@
             const conf = info.confidence || 0;
             confEl.className = 'stat-value ' + (conf >= 60 ? 'green' : conf >= 40 ? '' : 'red');
 
-            // Odds Edge
             const edgeEl = document.getElementById('sigEdge');
             edgeEl.textContent = (s.odds_edge || 0).toFixed(1) + '¢';
             edgeEl.className = 'stat-value ' + ((s.odds_edge || 0) > 10 ? 'green' : (s.odds_edge || 0) > 4 ? '' : 'red');
 
-            // Agreement
             document.getElementById('sigAgreement').textContent = (s.agreement || 0).toFixed(0) + '%';
 
-            // Momentum 60s
             const momEl = document.getElementById('sigMom60');
             const mom = s.mom_60s || 0;
             momEl.textContent = mom.toFixed(1);
             momEl.style.color = mom > 10 ? 'var(--green)' : mom < -10 ? 'var(--red)' : 'var(--muted)';
 
-            // Breakeven Win Rate
             document.getElementById('sigBE').textContent = (s.breakeven_wr || 50).toFixed(1) + '%';
 
-            // BTC vs Strike
             const diffEl = document.getElementById('sigDiff');
             const diff = s.diff_pct || 0;
             diffEl.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3) + '%';
             diffEl.style.color = Math.abs(diff) > 0.1 ? 'var(--green)' : Math.abs(diff) > 0.05 ? 'var(--accent)' : 'var(--muted)';
 
-            // Token Price
             document.getElementById('sigToken').textContent = '$' + (s.token_price || 0).toFixed(3);
-
-            // Reason
             document.getElementById('sigReason').textContent = s.odds_reason || '--';
 
-            // Update top signal badge too
             const badge = document.getElementById('signalBadge');
             if (info.confidence > 0 && s.odds_dir) {
                 badge.textContent = s.odds_dir === 'UP' ? '▲ UP' : '▼ DOWN';
@@ -1328,24 +1337,6 @@
                 badge.className = 'signal-badge skip';
             }
         }
-
-        // Update 5-min window display
-        updateWindowTimer(data.info);
-
-        // BTC Price
-        if (data.btc_price) {
-            document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-
-        // Button states
-        document.getElementById('btnStart').disabled = data.running;
-        document.getElementById('btnStop').disabled = !data.running;
-
-        // Update settings
-        const toggle = document.getElementById('toggleDryRun');
-        toggle.className = data.dry_run ? 'toggle on' : 'toggle';
-        document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
-        if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
 
         function updateWindowTimer(info) {
             const card = document.getElementById('windowCard');
@@ -1394,7 +1385,6 @@
             } catch (e) { }
         }
 
-        let currentFilter = 'all';
         function setFilter(p, btn) {
             currentFilter = p;
             document.querySelectorAll('.filter-btn').forEach(b => {
