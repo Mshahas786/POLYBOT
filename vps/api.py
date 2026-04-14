@@ -654,32 +654,26 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
             log_to_file(f"🎯 LIVE ORDER: {direction} ${bet_size} @ ${token_price:.3f}")
 
-            # Widen cap to $0.85, round to 0.01 tick size (Polymarket requirement)
+            # Round to 0.01 tick size (Polymarket requirement)
             capped_price = round(min(token_price + 0.10, 0.85), 2)
 
-            order_args = MarketOrderArgs(
+            # Use Limit order for full price control (market orders compute unrounded
+            # midpoints that break Polymarket's 0.01 tick rule)
+            from py_clob_client.order_builder import LimitOrderArgs
+            order_args = LimitOrderArgs(
                 token_id=token_id,
-                amount=bet_size,
+                price=capped_price,
+                size=bet_size,
                 side="BUY",
-                price=capped_price
             )
-            signed_order = client.create_market_order(order_args)
-            
-            # Try FOK first (all-or-nothing)
-            try:
-                resp = client.post_order(signed_order, OrderType.FOK)
-                order_type_used = "FOK"
-            except Exception as fok_err:
-                # FOK failed — fall back to GTC (fills whatever liquidity exists)
-                log_to_file(f"⚠️ FOK failed, retrying GTC: {fok_err}")
-                resp = client.post_order(signed_order, OrderType.GTC)
-                order_type_used = "GTC"
+            signed_order = client.create_order(order_args)
+            resp = client.post_order(signed_order, OrderType.FOK)
 
             if resp and (hasattr(resp, "orderID") or
                          (isinstance(resp, dict) and "orderID" in resp)):
                 order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
                 status = "placed"
-                log_to_file(f"✅ ORDER PLACED ({order_type_used}): {direction} | ID: {order_id}")
+                log_to_file(f"✅ ORDER PLACED: {direction} | ID: {order_id}")
             else:
                 status = "failed"
                 log_to_file(f"⚠️ Order failed: {resp}")
