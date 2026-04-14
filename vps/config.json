@@ -4,6 +4,6 @@
     "bet_size": 0.3,
     "spread_bps": 50,
     "max_trades_per_hour": 8,
-    "min_confidence": 55,
+    "min_confidence": 45,
     "strategy_version": "5.0"
 }

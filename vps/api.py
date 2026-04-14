@@ -535,7 +535,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
     if not is_dry and client:
         try:
-            from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
+            from py_clob_client.clob_types import OrderType, BalanceAllowanceParams, AssetType
             bet_size = float(cfg.get("bet_size", 2.0))
 
             # Balance check
@@ -558,18 +558,17 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
             log_to_file(f"🎯 LIVE ORDER: {direction} ${bet_size} @ ${token_price:.3f}")
 
-            # Cap price rounded to 0.01 tick size (Polymarket requirement)
+            # Limit order with exact rounded price (market orders auto-compute
+            # unrounded midpoints that break Polymarket's 0.01 tick rule)
+            from py_clob_client.clob_types import OrderArgs
             capped_price = round(min(token_price + 0.10, 0.85), 2)
-
-            order_args = MarketOrderArgs(
+            order_args = OrderArgs(
                 token_id=token_id,
-                amount=bet_size,
+                price=capped_price,
+                size=bet_size,
                 side="BUY",
-                price=capped_price
             )
-            signed_order = client.create_market_order(order_args)
-            # Round the computed midpoint to 0.01 tick size before posting
-            signed_order.price = round(signed_order.price, 2)
+            signed_order = client.create_order(order_args)
             resp = client.post_order(signed_order, OrderType.FOK)
 
             if resp and (hasattr(resp, "orderID") or
