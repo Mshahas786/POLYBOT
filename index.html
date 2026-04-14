@@ -980,24 +980,53 @@
             </div>
         </div>
 
-        <!-- Market Making Stats (hidden by default) -->
-        <div class="stats-grid" id="mmStats" style="display:none;">
-            <div class="stat-card">
-                <div class="stat-value green" id="mmFills">0</div>
-                <div class="stat-label">MM FILLS</div>
+        <!-- v5.0 Signal Analysis Panel -->
+        <div class="card" id="signalCard" style="display:none;">
+            <div
+                style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:0.1em; margin-bottom:12px;">
+                📊 v5.0 SIGNAL ANALYSIS</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="sigDirection">--</div>
+                    <div class="stat-label">DIRECTION</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="sigConfidence">--</div>
+                    <div class="stat-label">CONFIDENCE</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="sigEdge">--</div>
+                    <div class="stat-label">ODDS EDGE</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="sigAgreement">--</div>
+                    <div class="stat-label">SIGNAL AGREEMENT</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value green" id="mmProfit">$0.00</div>
-                <div class="stat-label">MM PROFIT</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">MOMENTUM 60s</div>
+                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigMom60">
+                        --</div>
+                </div>
+                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">BREAKEVEN WIN RATE</div>
+                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigBE">--
+                    </div>
+                </div>
+                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">BTC vs STRIKE</div>
+                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigDiff">
+                        --</div>
+                </div>
+                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">TOKEN PRICE</div>
+                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigToken">
+                        --</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value blue" id="mmSpread">0</div>
-                <div class="stat-label">SPREAD (bps)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="mmStrategy">--</div>
-                <div class="stat-label">STRATEGY</div>
-            </div>
+            <div style="margin-top:8px; font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; line-height:1.4;"
+                id="sigReason">--</div>
         </div>
 
         <!-- 5-Minute Market Window -->
@@ -1101,32 +1130,20 @@
                 trades.</div>
             <div class="sep"></div>
             <div class="setting-group">
-                <label class="setting-label">STRATEGY</label>
-                <select class="setting-input" id="strategySelect">
-                    <option value="market_making">Market Making (Capture Spread)</option>
-                    <option value="directional">Directional (Predict UP/DOWN)</option>
-                </select>
-                <div class="setting-hint">MM: Profit from bid-ask spread. Directional: Predict price movement.</div>
-            </div>
-            <div class="setting-group">
                 <label class="setting-label">BET SIZE (USDC)</label>
                 <input class="setting-input" id="betSize" type="number" value="2" min="0.1" step="0.5">
                 <div class="setting-hint">Amount per trade in USDC</div>
             </div>
             <div class="setting-group">
-                <label class="setting-label">SPREAD (basis points)</label>
-                <input class="setting-input" id="spreadBps" type="number" value="50" min="10" max="200">
-                <div class="setting-hint">MM only: 50bps = 0.5% spread. Lower = more fills, less profit per trade.</div>
-            </div>
-            <div class="setting-group">
                 <label class="setting-label">MAX TRADES PER HOUR</label>
-                <input class="setting-input" id="maxTrades" type="number" value="20" min="1" max="50">
-                <div class="setting-hint">MM recommended: 20-30. Directional: 8-12.</div>
+                <input class="setting-input" id="maxTrades" type="number" value="8" min="1" max="50">
+                <div class="setting-hint">v5.0 recommended: 6-10. Prevents overtrading on low-edge signals.</div>
             </div>
             <div class="setting-group">
                 <label class="setting-label">MIN CONFIDENCE %</label>
                 <input class="setting-input" id="minConfidence" type="number" value="55" min="10" max="100">
-                <div class="setting-hint">Directional only: Minimum signal confidence. MM ignores this.</div>
+                <div class="setting-hint">Minimum signal confidence to enter a trade. Higher = fewer, better trades.
+                </div>
             </div>
             <button class="save-btn" onclick="saveStrategySettings()">SAVE STRATEGY</button>
         </div>
@@ -1142,11 +1159,12 @@
             <div
                 style="font-size: 11px; color: var(--muted); line-height: 2; font-family: 'JetBrains Mono', monospace;">
                 <div>Bot: PolyBot v5.0 (Odds-Edge)</div>
-                <div>Strategy: Market Making (capture spread) / Directional</div>
-                <div>MM: Buy cheap, sell expensive, profit from bid-ask gap</div>
-                <div>Order Type: GTC Limit Orders @ configurable spread</div>
-                <div>Market: BTC Up/Down 5-Min</div>
-                <div>Win Rate Target: 65-75% (MM), 55-65% (Directional)</div>
+                <div>Engine: Odds Mispricing + Momentum Detection</div>
+                <div>Entry Window: 120-250s remaining per 5-min candle</div>
+                <div>Order Type: FOK Market Orders @ capped price</div>
+                <div>Market: Polymarket BTC Up/Down 5-Min</div>
+                <div>Win Rate Target: 55-70% (Directional)</div>
+                <div>v5.0 Fixes: Redemption, outcome tracking, confidence formula</div>
             </div>
         </div>
     </div>
@@ -1222,9 +1240,8 @@
                 modeBanner.innerHTML = '💰 LIVE TRADING — Real orders are being placed';
             }
 
-            // H7 FIX: v5.0 is odds-edge directional only — no market making mode
-            // Always show directional stats, hide dead MM grid
-            document.getElementById('mmStats').style.display = 'none';
+            // v5.0: Update Signal Analysis Panel
+            updateSignalPanel(data.info);
 
             // Directional stats
             const wins = data.wins || 0;
@@ -1244,6 +1261,72 @@
 
             document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
             document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+        }
+
+        // v5.0: Update Signal Analysis Panel
+        function updateSignalPanel(info) {
+            const card = document.getElementById('signalCard');
+            if (!info || !info.signals || Object.keys(info.signals).length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+            const s = info.signals;
+
+            // Direction + Confidence
+            const dirEl = document.getElementById('sigDirection');
+            if (info.confidence > 0 && s.odds_dir) {
+                dirEl.textContent = s.odds_dir === 'UP' ? '▲ UP' : '▼ DOWN';
+                dirEl.className = 'stat-value ' + (s.odds_dir === 'UP' ? 'green' : 'red');
+            } else {
+                dirEl.textContent = 'NONE';
+                dirEl.className = 'stat-value';
+                dirEl.style.color = 'var(--muted)';
+            }
+
+            document.getElementById('sigConfidence').textContent = (info.confidence || 0).toFixed(1) + '%';
+            const confEl = document.getElementById('sigConfidence');
+            const conf = info.confidence || 0;
+            confEl.className = 'stat-value ' + (conf >= 60 ? 'green' : conf >= 40 ? '' : 'red');
+
+            // Odds Edge
+            const edgeEl = document.getElementById('sigEdge');
+            edgeEl.textContent = (s.odds_edge || 0).toFixed(1) + '¢';
+            edgeEl.className = 'stat-value ' + ((s.odds_edge || 0) > 10 ? 'green' : (s.odds_edge || 0) > 4 ? '' : 'red');
+
+            // Agreement
+            document.getElementById('sigAgreement').textContent = (s.agreement || 0).toFixed(0) + '%';
+
+            // Momentum 60s
+            const momEl = document.getElementById('sigMom60');
+            const mom = s.mom_60s || 0;
+            momEl.textContent = mom.toFixed(1);
+            momEl.style.color = mom > 10 ? 'var(--green)' : mom < -10 ? 'var(--red)' : 'var(--muted)';
+
+            // Breakeven Win Rate
+            document.getElementById('sigBE').textContent = (s.breakeven_wr || 50).toFixed(1) + '%';
+
+            // BTC vs Strike
+            const diffEl = document.getElementById('sigDiff');
+            const diff = s.diff_pct || 0;
+            diffEl.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3) + '%';
+            diffEl.style.color = Math.abs(diff) > 0.1 ? 'var(--green)' : Math.abs(diff) > 0.05 ? 'var(--accent)' : 'var(--muted)';
+
+            // Token Price
+            document.getElementById('sigToken').textContent = '$' + (s.token_price || 0).toFixed(3);
+
+            // Reason
+            document.getElementById('sigReason').textContent = s.odds_reason || '--';
+
+            // Update top signal badge too
+            const badge = document.getElementById('signalBadge');
+            if (info.confidence > 0 && s.odds_dir) {
+                badge.textContent = s.odds_dir === 'UP' ? '▲ UP' : '▼ DOWN';
+                badge.className = 'signal-badge ' + (s.odds_dir === 'UP' ? 'up' : 'down');
+            } else {
+                badge.textContent = '⏸ WAITING';
+                badge.className = 'signal-badge skip';
+            }
         }
 
         // Update 5-min window display
@@ -1355,7 +1438,14 @@
             const isLoss = outcome === 'loss';
             const isPending = outcome === null;
             const isFailed = trade.status === 'failed';
-            const retryCount = trade.retry_attempt || 0;
+
+            // v5.0 signal details
+            const sig = trade.signals || {};
+            const oddsDir = sig.odds_dir || dir;
+            const oddsEdge = sig.odds_edge || 0;
+            const mom60 = sig.mom_60s !== undefined ? sig.mom_60s.toFixed(1) : '--';
+            const breakevenWR = sig.breakeven_wr ? sig.breakeven_wr.toFixed(1) + '%' : '--';
+            const agreement = sig.agreement ? sig.agreement.toFixed(0) + '%' : '--';
 
             // Calculate profit/loss
             let profitHtml = '';
@@ -1364,7 +1454,7 @@
             } else if (isLoss) {
                 profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Loss:</span><span class="trade-detail-value loss">-$${betSize.toFixed(2)}</span></div>`;
             } else if (isFailed) {
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value loss">Failed${retryCount > 0 ? ` (${retryCount} retries)` : ''}</span></div>`;
+                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value loss">Failed</span></div>`;
             } else {
                 profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value">Pending...</span></div>`;
             }
@@ -1374,7 +1464,6 @@
             const statusLabel = isWin ? '✅ WIN' : (isLoss ? '❌ LOSS' : (isFailed ? '❌ FAILED' : (isPending ? '⏳ PENDING' : '🧪 SIMULATED')));
 
             const slug = trade.market_slug || '';
-            const link = slug ? `https://polymarket.com/event/${slug.replace(/\s+/g, '-').toLowerCase()}` : '#';
 
             return `<div class="trade-card trade-expand ${cardClass}" onclick="this.classList.toggle('expanded'); this.querySelector('.trade-extra').classList.toggle('show')">
                 <div class="trade-top">
@@ -1382,18 +1471,27 @@
                     <span class="trade-status ${statusClass}">${statusLabel}</span>
                 </div>
                 <div class="trade-details">
-                    <div class="trade-detail-item"><span class="trade-detail-label">Entry Price:</span><span class="trade-detail-value">${price}</span></div>
+                    <div class="trade-detail-item"><span class="trade-detail-label">BTC Entry:</span><span class="trade-detail-value">${price}</span></div>
                     <div class="trade-detail-item"><span class="trade-detail-label">Confidence:</span><span class="trade-detail-value">${confidence}</span></div>
                     ${profitHtml}
                     <div class="trade-detail-item"><span class="trade-detail-label">Date:</span><span class="trade-detail-value">${date} ${time}</span></div>
                 </div>
                 <div class="trade-extra">
                     <div class="trade-extra-inner">
-                        <div>Market: ${slug || 'N/A'}</div>
-                        <div>Window: ${trade.window_ts ? new Date(trade.window_ts * 1000).toLocaleString() : 'N/A'}</div>
-                        <div>Order ID: ${trade.order_id || 'N/A'}</div>
-                        <div>Redeemed: ${trade.redeemed ? '✅ Yes' : '❌ No'}</div>
-                        ${trade.close_price ? `<div>Close Price: $${parseFloat(trade.close_price).toLocaleString()}</div>` : ''}
+                        <div style="font-size:10px; color:var(--muted); letter-spacing:0.05em; margin-bottom:6px;">v5.0 SIGNAL DETAILS</div>
+                        <div>Odds Direction: <strong style="color:${oddsDir === 'UP' ? 'var(--green)' : 'var(--red)'}">${oddsDir}</strong> (edge: ${oddsEdge.toFixed(1)}¢)</div>
+                        <div>Momentum 60s: ${mom60}</div>
+                        <div>Breakeven Win Rate: ${breakevenWR}</div>
+                        <div>Signal Agreement: ${agreement}</div>
+                        <div>Token Price: $${(trade.token_price || 0).toFixed(3)}</div>
+                        <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
+                            <div>Market: ${slug || 'N/A'}</div>
+                            <div>Window: ${trade.window_ts ? new Date(trade.window_ts * 1000).toLocaleString() : 'N/A'}</div>
+                            <div>Order ID: ${trade.order_id || 'N/A'}</div>
+                            <div>Redeemed: ${trade.redeemed ? '✅ Yes' : '❌ No'}</div>
+                            ${trade.price_to_beat ? `<div>Strike Price: $${parseFloat(trade.price_to_beat).toLocaleString()}</div>` : ''}
+                            ${trade.resolve_price ? `<div>Resolve Price: $${parseFloat(trade.resolve_price).toLocaleString()}</div>` : ''}
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -1432,11 +1530,12 @@
         async function saveStrategySettings() {
             const cfg = {
                 dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
-                strategy: document.getElementById('strategySelect').value || 'market_making',
+                strategy: 'directional',
                 bet_size: parseFloat(document.getElementById('betSize').value) || 2,
-                spread_bps: parseInt(document.getElementById('spreadBps').value) || 50,
-                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 20,
+                spread_bps: 50,
+                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 8,
                 min_confidence: parseInt(document.getElementById('minConfidence').value) || 55,
+                strategy_version: '5.0'
             };
             try {
                 await fetch(VPS_URL + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
