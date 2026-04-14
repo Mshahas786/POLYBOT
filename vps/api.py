@@ -664,13 +664,22 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                 price=capped_price
             )
             signed_order = client.create_market_order(order_args)
-            resp = client.post_order(signed_order, OrderType.FOK)
+            
+            # Try FOK first (all-or-nothing)
+            try:
+                resp = client.post_order(signed_order, OrderType.FOK)
+                order_type_used = "FOK"
+            except Exception as fok_err:
+                # FOK failed — fall back to GTC (fills whatever liquidity exists)
+                log_to_file(f"⚠️ FOK failed, retrying GTC: {fok_err}")
+                resp = client.post_order(signed_order, OrderType.GTC)
+                order_type_used = "GTC"
 
             if resp and (hasattr(resp, "orderID") or
                          (isinstance(resp, dict) and "orderID" in resp)):
                 order_id = getattr(resp, "orderID", resp.get("orderID") if isinstance(resp, dict) else "N/A")
                 status = "placed"
-                log_to_file(f"✅ ORDER PLACED: {direction} | ID: {order_id}")
+                log_to_file(f"✅ ORDER PLACED ({order_type_used}): {direction} | ID: {order_id}")
             else:
                 status = "failed"
                 log_to_file(f"⚠️ Order failed: {resp}")
