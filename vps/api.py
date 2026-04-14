@@ -654,8 +654,8 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
 
             log_to_file(f"🎯 LIVE ORDER: {direction} ${bet_size} @ ${token_price:.3f}")
 
-            # Cap price at 0.95 max to avoid terrible ROI trades
-            capped_price = min(token_price + 0.03, 0.95)
+            # Widen cap to $0.60 to ensure FOK fills on thin 5-min order books
+            capped_price = min(token_price + 0.10, 0.60)
 
             order_args = MarketOrderArgs(
                 token_id=token_id,
