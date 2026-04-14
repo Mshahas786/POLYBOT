@@ -657,10 +657,10 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
             # Round to 0.01 tick size (Polymarket requirement)
             capped_price = round(min(token_price + 0.10, 0.85), 2)
 
-            # Use Limit order for full price control (market orders compute unrounded
-            # midpoints that break Polymarket's 0.01 tick rule)
-            from py_clob_client.order_builder import LimitOrderArgs
-            order_args = LimitOrderArgs(
+            # Use limit order with exact rounded price (market orders compute
+            # unrounded midpoints that break Polymarket's 0.01 tick rule)
+            from py_clob_client.order_builder import OrderArgs
+            order_args = OrderArgs(
                 token_id=token_id,
                 price=capped_price,
                 size=bet_size,
