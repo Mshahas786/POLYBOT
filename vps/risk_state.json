@@ -1,0 +1,15 @@
+{
+  "date": "2026-05-01",
+  "daily_pnl": 0.0,
+  "daily_wins": 0,
+  "daily_losses": 0,
+  "consecutive_losses": 0,
+  "peak_bankroll": 100.505,
+  "current_bankroll": 99.08999999999999,
+  "total_trades_all_time": 14,
+  "total_wins_all_time": 6,
+  "total_losses_all_time": 8,
+  "circuit_breaker_tripped": false,
+  "circuit_breaker_reason": null,
+  "circuit_breaker_time": null
+}

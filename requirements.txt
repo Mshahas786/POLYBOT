@@ -1,0 +1,30 @@
+# ============================================================
+# PolyBot - Production Dependencies
+# ============================================================
+# Install: pip install -r requirements.txt
+# ============================================================
+
+# ── Web Framework ──────────────────────────────────────────
+flask>=3.0.0,<4.0.0
+flask-cors>=4.0.0,<5.0.0
+
+# ── HTTP & WebSocket ──────────────────────────────────────
+requests>=2.31.0,<3.0.0
+websocket-client>=1.7.0,<2.0.0
+
+# ── Environment & Config ──────────────────────────────────
+python-dotenv>=1.0.0,<2.0.0
+
+# ── Polymarket SDKs ───────────────────────────────────────
+# py-clob-client is the official Polymarket CLOB client.
+# NOTE: If you get Web3 compatibility errors, downgrade to web3<7.0.0
+py-clob-client>=0.34.0,<0.40.0
+
+# ── Blockchain & Crypto ───────────────────────────────────
+# web3 v7 introduced breaking changes. v6.x is safer with py-clob-client.
+web3>=6.0.0,<7.0.0
+eth-abi>=5.0.0,<6.0.0
+eth-utils>=4.0.0,<5.0.0
+
+# ── Risk & Math ───────────────────────────────────────────
+# (No heavy ML — keeping it lightweight for VPS deployment)
