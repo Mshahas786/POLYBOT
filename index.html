@@ -316,6 +316,8 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div class="card-title" style="margin-bottom:0;">&#128203; TRADE HISTORY</div>
                 <div style="display:flex; gap:4px;">
+                    <button class="filter-btn" onclick="exportTrades('json')" title="Export JSON" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">&#11015; JSON</button>
+                    <button class="filter-btn" onclick="exportTrades('csv')" title="Export CSV" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">&#11015; CSV</button>
                     <button class="filter-btn" onclick="setFilter('1h', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">1H</button>
                     <button class="filter-btn" onclick="setFilter('24h', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">24H</button>
                     <button class="filter-btn active" onclick="setFilter('all', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); cursor:pointer;">ALL</button>
@@ -874,6 +876,23 @@
         async function clearTrades() {
             if (!confirm('Clear all trade history?')) return;
             try { await fetch(VPS_URL + '/clear-trades', { method: 'POST' }); showToast('Trades cleared', 'success'); fetchTrades(); } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function exportTrades(format) {
+            try {
+                const resp = await fetch(VPS_URL + '/export-trades?format=' + format);
+                if (!resp.ok) throw new Error('Export failed');
+                const blob = await resp.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'polybot_trades.' + format;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                showToast('Downloaded polybot_trades.' + format, 'success');
+            } catch (e) { showToast(e.message, 'error'); }
         }
 
         function setOffline(error) {

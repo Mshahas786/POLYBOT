@@ -5,6 +5,8 @@ Upgrades: Risk management, P&L tracking, circuit breakers, health checks,
           session-based auto-stop, slippage guards, structured logging.
 """
 
+import csv
+import io
 import json
 import os
 import time
@@ -12,8 +14,9 @@ import threading
 import requests
 import websocket
 from datetime import datetime, timezone, timedelta
+from functools import wraps
 from pathlib import Path
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -33,6 +36,20 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
+
+# ── API Key Middleware ─────────────────────────────────────────────────
+API_KEY = os.getenv("POLYBOT_API_KEY", "")
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not API_KEY:
+            return f(*args, **kwargs)
+        provided = request.headers.get("X-API-Key", "")
+        if provided != API_KEY:
+            return jsonify({"status": "unauthorized", "message": "Invalid or missing X-API-Key header"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 # ── Paths ───────────────────────────────────────────────────────────────
 BOT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -66,6 +83,8 @@ class BinanceWS:
         self.ws = None
         self.thread = None
         self.last_buf = 0
+        self._reconnect_delay = 5
+        self._max_reconnect_delay = 60
 
     def on_message(self, ws, message):
         global last_btc_price, price_buffer
@@ -80,18 +99,26 @@ class BinanceWS:
                     price_buffer = price_buffer[-PRICE_BUFFER_SIZE:]
                 self.last_buf = now
 
-    def on_error(self, ws, error): pass
+    def on_error(self, ws, error):
+        log_to_file(f"Binance WS error: {error}", "WARN")
 
     def on_close(self, ws, code, msg):
-        time.sleep(5)
+        log_to_file(f"Binance WS closed (code={code}). Reconnecting in {self._reconnect_delay}s...", "WARN")
+        time.sleep(self._reconnect_delay)
+        self._reconnect_delay = min(self._reconnect_delay * 2, self._max_reconnect_delay)
         self.run()
+
+    def on_open(self, ws):
+        log_to_file("Binance WS connected", "INFO")
+        self._reconnect_delay = 5  # Reset backoff on successful connection
 
     def run(self):
         self.ws = websocket.WebSocketApp(
             self.url,
             on_message=self.on_message,
             on_error=self.on_error,
-            on_close=self.on_close
+            on_close=self.on_close,
+            on_open=self.on_open
         )
         self.ws.run_forever(ping_interval=30, ping_timeout=10)
 
@@ -124,9 +151,15 @@ def safe_write_json(path, data):
     return False
 
 log_lock = threading.Lock()
-def log_to_file(msg):
+LOG_LEVELS = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
+LOG_LEVEL = LOG_LEVELS.get(os.getenv("POLYBOT_LOG_LEVEL", "INFO").upper(), 20)
+
+def log_to_file(msg, level="INFO"):
+    level_num = LOG_LEVELS.get(level, 20)
+    if level_num < LOG_LEVEL:
+        return
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    full_msg = f"{ts} [INFO] {msg}"
+    full_msg = f"{ts} [{level}] {msg}"
     print(full_msg)
     for _ in range(5):
         try:
@@ -832,7 +865,45 @@ def risk_status():
         return jsonify({"error": "Risk manager not initialized"}), 503
     return jsonify(risk_manager.get_stats())
 
+@app.route("/export-trades")
+def export_trades():
+    """Export trade history as JSON or CSV."""
+    fmt = request.args.get("format", "json").lower()
+    trades = safe_read_json(TRADES_PATH) or []
+    if fmt == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "timestamp", "window_ts", "market_slug", "direction", "token_price",
+            "btc_price", "price_to_beat", "confidence", "bet_size", "dry_run",
+            "status", "outcome", "pnl", "order_id"
+        ])
+        for t in trades:
+            writer.writerow([
+                t.get("timestamp", ""),
+                t.get("window_ts", ""),
+                t.get("market_slug", ""),
+                t.get("direction", ""),
+                t.get("token_price", ""),
+                t.get("btc_price", ""),
+                t.get("price_to_beat", ""),
+                t.get("confidence", ""),
+                t.get("bet_size", ""),
+                t.get("dry_run", ""),
+                t.get("status", ""),
+                t.get("outcome", ""),
+                t.get("pnl", ""),
+                t.get("order_id", "")
+            ])
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=polybot_trades.csv"}
+        )
+    return jsonify({"trades": trades, "count": len(trades)})
+
 @app.route("/start", methods=["POST"])
+@require_api_key
 def start_bot():
     global bot_running, bot_thread
     if not bot_running:
@@ -843,12 +914,14 @@ def start_bot():
     return jsonify({"status": "already_running"})
 
 @app.route("/stop", methods=["POST"])
+@require_api_key
 def stop_bot():
     global bot_running
     bot_running = False
     return jsonify({"status": "stopped"})
 
 @app.route("/restart", methods=["POST"])
+@require_api_key
 def restart_bot():
     global bot_running, bot_thread
     if not bot_running:
@@ -864,6 +937,7 @@ def restart_bot():
     return jsonify({"status": "restarted"})
 
 @app.route("/reset-risk", methods=["POST"])
+@require_api_key
 def reset_risk():
     """Manual reset of circuit breaker and daily counters (use with caution)."""
     if risk_manager:
@@ -873,6 +947,7 @@ def reset_risk():
     return jsonify({"status": "no_risk_manager"}), 503
 
 @app.route("/config", methods=["GET", "POST"])
+@require_api_key
 def handle_config():
     if request.method == "POST":
         data = request.get_json()
@@ -888,6 +963,26 @@ def handle_config():
         return jsonify({"status": "saved"})
     return jsonify(safe_read_json(CONFIG_PATH) or {})
 
+@app.route("/clear-trades", methods=["POST"])
+@require_api_key
+def clear_trades():
+    try:
+        if TRADES_PATH.exists():
+            TRADES_PATH.unlink()
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/clear-logs", methods=["POST"])
+@require_api_key
+def clear_logs():
+    try:
+        if LOG_PATH.exists():
+            LOG_PATH.unlink()
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
 @app.route("/logs")
 def get_logs():
     if not LOG_PATH.exists():
@@ -898,24 +993,6 @@ def get_logs():
         return jsonify({"logs": [l.strip() for l in lines[-200:]]})
     except:
         return jsonify({"logs": []})
-
-@app.route("/clear-trades", methods=["POST"])
-def clear_trades():
-    try:
-        if TRADES_PATH.exists():
-            TRADES_PATH.unlink()
-        return jsonify({"status": "cleared"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-@app.route("/clear-logs", methods=["POST"])
-def clear_logs():
-    try:
-        if LOG_PATH.exists():
-            LOG_PATH.unlink()
-        return jsonify({"status": "cleared"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")

@@ -177,6 +177,33 @@ ssh user@your-vps "cd ~/polybot && bash setup.sh"
 - **Bot logs:** `~/polybot/bot.log`
 - **API status:** `http://127.0.0.1:3000/status`
 - **API stats:** `http://127.0.0.1:3000/stats`
+- **Health check:** `http://127.0.0.1:3000/health` (returns 503 if feeds are down)
+
+### Export Trade History
+
+```bash
+# JSON export
+curl http://localhost:3000/export-trades
+
+# CSV download
+curl -O -J http://localhost:3000/export-trades?format=csv
+```
+
+### API Key Protection (Optional)
+
+Set `POLYBOT_API_KEY` in your `.env` to require an `X-API-Key` header on sensitive endpoints (`/start`, `/stop`, `/config`, `/reset-risk`, `/clear-trades`, `/clear-logs`):
+
+```bash
+curl -H "X-API-Key: your_secret_key" -X POST http://localhost:3000/start
+```
+
+### Log Levels
+
+Control verbosity via `POLYBOT_LOG_LEVEL` in `.env`:
+- `DEBUG` — All messages including signal diagnostics
+- `INFO` — Standard operational logs (default)
+- `WARN` — Warnings and errors only
+- `ERROR` — Critical failures only
 
 ## ⚠️ Risk Disclaimer
 

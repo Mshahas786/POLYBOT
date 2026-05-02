@@ -75,10 +75,14 @@ class RiskManager:
 
     def _save_state(self):
         try:
+            # Backup existing state before overwrite
+            if self.state_path.exists():
+                backup_path = self.state_path.with_suffix(".json.bak")
+                backup_path.write_text(self.state_path.read_text(encoding="utf-8"), encoding="utf-8")
             with open(self.state_path, "w", encoding="utf-8") as f:
                 json.dump(self.state, f, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Risk state save failed: {e}")
 
     def _maybe_roll_day(self):
         """Reset daily counters if the date changed."""
