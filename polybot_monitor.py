@@ -11,7 +11,8 @@ import os
 import sys
 from datetime import datetime
 
-POLYBOT_DIR = "/Users/mshahas/Downloads/POLYBOT-main/vps"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+POLYBOT_DIR = os.path.join(SCRIPT_DIR, "vps")
 LOG_FILE = "/tmp/polybot_monitor.log"
 
 def log(msg):
@@ -23,7 +24,7 @@ def log(msg):
 def check_process():
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "python3 api.py"],
+            ["pgrep", "-f", "api.py"],
             capture_output=True, text=True
         )
         return result.returncode == 0
@@ -33,8 +34,12 @@ def check_process():
 def start_bot():
     log("Starting POLYBOT...")
     try:
+        # Detect virtual environment python
+        venv_python = os.path.join(SCRIPT_DIR, "venv", "bin", "python")
+        python_bin = venv_python if os.path.exists(venv_python) else sys.executable
+        
         process = subprocess.Popen(
-            [sys.executable, "api.py"],
+            [python_bin, "api.py"],
             cwd=POLYBOT_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

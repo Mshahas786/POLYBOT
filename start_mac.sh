@@ -30,13 +30,20 @@ if [ ! -f "$BOT_DIR/.env" ]; then
     exit 1
 fi
 
-# Install dependencies if needed
-echo "🔧 Checking dependencies..."
-pip3 install -q -r "$SCRIPT_DIR/requirements.txt" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "⚠️  Dependency install failed. Trying with python..."
-    pip install -q -r "$SCRIPT_DIR/requirements.txt"
+# Activate virtual environment
+if [ -d "$SCRIPT_DIR/venv" ]; then
+    echo "⚡ Activating virtual environment..."
+    source "$SCRIPT_DIR/venv/bin/activate"
+else
+    echo "⚠️  No virtual environment found at $SCRIPT_DIR/venv."
+    echo "🔧 Creating a new one..."
+    python3 -m venv "$SCRIPT_DIR/venv"
+    source "$SCRIPT_DIR/venv/bin/activate"
 fi
+
+# Install dependencies if needed
+echo "🔧 Checking and installing dependencies inside virtual environment..."
+pip install -q -r "$SCRIPT_DIR/requirements.txt"
 
 # Set max open files for macOS
 ulimit -n 10240 2>/dev/null || true
@@ -62,4 +69,4 @@ echo ""
 
 # Run the API server
 cd "$BOT_DIR"
-exec python3 api.py 2>&1 | tee "$LOG_DIR/polybot.log"
+exec python api.py 2>&1 | tee "$LOG_DIR/polybot.log"
