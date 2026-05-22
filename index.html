@@ -1,933 +1,481 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="PolyBot">
-    <link rel="icon" type="image/svg+xml"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129302;</text></svg>">
-    <title>PolyBot Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        :root {
-            --bg: #05050a; --surface: rgba(14, 14, 22, 0.85); --card: rgba(19, 19, 29, 0.7);
-            --card-hover: rgba(24, 24, 38, 0.85); --border: rgba(40, 40, 60, 0.4);
-            --accent: #f0b429; --accent-dim: rgba(240, 180, 41, 0.1); --accent-glow: rgba(240, 180, 41, 0.45);
-            --green: #00ffcc; --green-dim: rgba(0, 255, 204, 0.1);
-            --red: #ff3e4e; --red-dim: rgba(255, 62, 78, 0.1);
-            --blue: #3b82f6; --blue-dim: rgba(59, 130, 246, 0.1);
-            --purple: #a855f7; --purple-dim: rgba(168, 85, 247, 0.1);
-            --text: #ffffff; --text-secondary: #94a3b8; --muted: #475569;
-            --radius: 18px; --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-        body {
-            background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh; min-height: 100dvh; padding-bottom: 72px; overflow-x: hidden;
-        }
-        .header {
-            background: linear-gradient(180deg, var(--surface) 0%, rgba(14, 14, 22, 0.95) 100%);
-            border-bottom: 1px solid var(--border); padding: 14px 16px 12px;
-            position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-        }
-        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .logo { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); }
-        .logo span { color: var(--text); font-weight: 400; }
-        .status-badge {
-            display: flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace;
-            font-size: 11px; font-weight: 500; padding: 5px 10px; border-radius: 20px;
-            background: var(--green-dim); border: 1px solid rgba(0, 212, 170, 0.2); transition: all 0.3s ease;
-        }
-        .status-badge.offline { background: var(--red-dim); border-color: rgba(255, 71, 87, 0.2); }
-        .status-badge.blocked { background: var(--purple-dim); border-color: rgba(168, 85, 247, 0.3); }
-        .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s ease-in-out infinite; }
-        .pulse.off { background: var(--red); box-shadow: 0 0 6px rgba(255, 71, 87, 0.4); animation: none; }
-        .pulse.blocked { background: var(--purple); box-shadow: 0 0 6px var(--purple); animation: pulse 1s ease-in-out infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } }
-        .bot-controls { display: flex; gap: 8px; align-items: center; }
-        .ctrl-btn {
-            font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-            padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card);
-            color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 5px;
-        }
-        .ctrl-btn:active { transform: scale(0.96); }
-        .ctrl-btn.start { border-color: rgba(0, 212, 170, 0.3); color: var(--green); }
-        .ctrl-btn.start:hover { background: var(--green-dim); }
-        .ctrl-btn.stop { border-color: rgba(255, 71, 87, 0.3); color: var(--red); }
-        .ctrl-btn.stop:hover { background: var(--red-dim); }
-        .ctrl-btn.restart { border-color: rgba(77, 159, 255, 0.3); color: var(--blue); }
-        .ctrl-btn.restart:hover { background: var(--blue-dim); }
-        .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .last-update { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
-        .tabbar {
-            display: flex; border-top: 1px solid var(--border);
-            background: linear-gradient(0deg, var(--surface) 0%, rgba(14, 14, 22, 0.97) 100%);
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-            padding-bottom: env(safe-area-inset-bottom, 0); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-        }
-        .tab { flex: 1; padding: 8px 4px 6px; background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 500; transition: color 0.2s; position: relative; }
-        .tab.active { color: var(--accent); }
-        .tab.active::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 24px; height: 2px; background: var(--accent); border-radius: 0 0 2px 2px; }
-        .tab-icon { font-size: 18px; line-height: 1; }
-        .page { display: none; padding: 12px; }
-        .page.active { display: block; animation: fadeIn 0.25s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card:hover { border-color: var(--accent-glow); transform: translateY(-2px); }
-        .card-title { font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 600; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; transition: all 0.2s; }
-        .stat-card:hover { border-color: var(--accent-dim); transform: translateY(-1px); }
-        .stat-value { font-size: 22px; font-family: 'JetBrains Mono', monospace; font-weight: 700; }
-        .stat-value.accent { color: var(--accent); }
-        .stat-value.green { color: var(--green); }
-        .stat-value.red { color: var(--red); }
-        .stat-value.blue { color: var(--blue); }
-        .stat-value.purple { color: var(--purple); }
-        .stat-label { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.04em; }
-        .price-banner { padding: 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
-        .price-label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
-        .price-value { font-size: 26px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); }
-        .signal-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; }
-        .signal-badge.up { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0, 212, 170, 0.25); }
-        .signal-badge.down { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255, 71, 87, 0.25); }
-        .signal-badge.skip { background: rgba(90, 90, 114, 0.15); color: var(--muted); border: 1px solid var(--border); }
-        .mode-banner { padding: 10px 14px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .mode-banner.dry { background: var(--blue-dim); border: 1px solid rgba(77, 159, 255, 0.25); color: var(--blue); }
-        .mode-banner.live { background: var(--green-dim); border: 1px solid rgba(0, 212, 170, 0.25); color: var(--green); }
-        .mode-banner.blocked { background: var(--purple-dim); border: 1px solid rgba(168, 85, 247, 0.25); color: var(--purple); }
-        .trade-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 8px; animation: slideUp 0.3s ease; }
-        .trade-card.win { border-left: 3px solid var(--green); }
-        .trade-card.loss { border-left: 3px solid var(--red); }
-        .trade-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .trade-dir { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; }
-        .trade-dir.up { color: var(--green); }
-        .trade-dir.down { color: var(--red); }
-        .trade-details { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); }
-        .trade-detail-item { display: flex; justify-content: space-between; }
-        .trade-detail-label { color: var(--muted); }
-        .trade-detail-value { color: var(--text); }
-        .trade-detail-value.profit { color: var(--green); font-weight: 600; }
-        .trade-detail-value.loss { color: var(--red); font-weight: 600; }
-        .trade-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-        .trade-time { font-size: 9px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
-        .trade-status { font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 2px 6px; border-radius: 4px; }
-        .trade-status.win { background: var(--green-dim); color: var(--green); }
-        .trade-status.loss { background: var(--red-dim); color: var(--red); }
-        .trade-status.pending { background: var(--accent-dim); color: var(--accent); }
-        .trade-status.simulated { background: var(--blue-dim); color: var(--blue); }
-        .trade-status.failed { background: rgba(255, 62, 78, 0.15); color: var(--red); border: 1px solid rgba(255, 62, 78, 0.3); }
-        .refresh-btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; cursor: pointer; letter-spacing: 0.06em; margin-bottom: 12px; transition: all 0.2s; }
-        .refresh-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
-        .refresh-btn:active { transform: scale(0.98); }
-        .setting-group { margin-bottom: 16px; }
-        .setting-label { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px; display: block; }
-        .setting-input, .setting-select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; font-family: 'JetBrains Mono', monospace; outline: none; transition: border-color 0.2s; }
-        .setting-input:focus, .setting-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-        .setting-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%235a5a72' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-        .setting-select option { background: var(--surface); color: var(--text); }
-        .setting-hint { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
-        .save-btn { width: 100%; padding: 14px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #e5a520 100%); color: #000; font-size: 13px; font-family: 'JetBrains Mono', monospace; font-weight: 700; cursor: pointer; letter-spacing: 0.08em; transition: all 0.2s; box-shadow: 0 4px 15px rgba(240, 180, 41, 0.2); }
-        .save-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(240, 180, 41, 0.3); }
-        .save-btn:active { transform: scale(0.98); }
-        .danger-btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 71, 87, 0.3); background: var(--red-dim); color: var(--red); font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 600; cursor: pointer; margin-top: 8px; transition: all 0.2s; }
-        .danger-btn:hover { background: rgba(255, 71, 87, 0.2); }
-        .purple-btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(168, 85, 247, 0.3); background: var(--purple-dim); color: var(--purple); font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 600; cursor: pointer; margin-top: 8px; transition: all 0.2s; }
-        .purple-btn:hover { background: rgba(168, 85, 247, 0.2); }
-        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
-        .toggle-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; }
-        .toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--border); border: none; cursor: pointer; position: relative; transition: background 0.3s; }
-        .toggle.on { background: var(--green); }
-        .toggle::after { content: ''; width: 18px; height: 18px; border-radius: 50%; background: white; position: absolute; top: 3px; left: 3px; transition: transform 0.3s; }
-        .toggle.on::after { transform: translateX(20px); }
-        .warn-box { background: var(--red-dim); border: 1px solid rgba(255, 71, 87, 0.3); border-radius: 10px; padding: 12px; font-size: 12px; color: var(--red); line-height: 1.6; margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; }
-        .info-box { background: var(--accent-dim); border: 1px solid rgba(240, 180, 41, 0.25); border-radius: 10px; padding: 12px; font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; }
-        .log-entry { display: flex; gap: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; padding: 5px 0; border-bottom: 1px solid rgba(30, 30, 46, 0.5); line-height: 1.5; }
-        .log-time { color: var(--muted); flex-shrink: 0; font-size: 10px; }
-        .log-msg { word-break: break-word; }
-        .log-msg.info { color: var(--text); }
-        .log-msg.warn { color: var(--accent); }
-        .log-msg.error { color: var(--red); }
-        .log-msg.success { color: var(--green); }
-        .loading { text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 30px; }
-        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); z-index: 999; opacity: 0; transition: all 0.3s ease; pointer-events: none; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); }
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-        .toast.success { border-color: rgba(0, 212, 170, 0.3); color: var(--green); }
-        .toast.error { border-color: rgba(255, 71, 87, 0.3); color: var(--red); }
-        .sep { height: 1px; background: var(--border); margin: 16px 0; }
-        .trade-expand { cursor: pointer; user-select: none; }
-        .trade-expand:hover { background: var(--card-hover); }
-        .trade-expand::after { content: '&#9660;'; display: inline-block; margin-left: 8px; font-size: 8px; color: var(--muted); transition: transform 0.2s; }
-        .trade-expand.expanded::after { transform: rotate(180deg); }
-        .trade-extra { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-        .trade-extra.show { max-height: 120px; }
-        .trade-extra-inner { padding: 8px 0 0; font-size: 10px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
-        .risk-stat { display: flex; justify-content: space-between; font-size: 11px; font-family: 'JetBrains Mono', monospace; padding: 4px 0; border-bottom: 1px solid rgba(40,40,60,0.3); }
-        .risk-stat-label { color: var(--muted); }
-        .risk-stat-value { font-weight: 600; }
-        .risk-stat-value.ok { color: var(--green); }
-        .risk-stat-value.warn { color: var(--accent); }
-        .risk-stat-value.danger { color: var(--red); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PolyBot Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a12;--surface:#12121e;--border:#2a2a3e;--accent:#f0b429;--green:#00e5a0;--red:#ff4757;--blue:#4d9fff;--purple:#a855f7;--text:#e2e2f0;--text2:#8888a0;--muted:#555570;--radius:10px}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100dvh;padding:16px;max-width:700px;margin:0 auto}
+h1{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--accent);margin-bottom:4px}
+h1 small{color:var(--text2);font-size:10px;font-weight:400}
+.status-line{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;font-size:11px;font-family:'JetBrains Mono',monospace}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot.g{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.r{background:var(--red);box-shadow:0 0 6px rgba(255,71,87,.4)}
+.dot.y{background:var(--accent);box-shadow:0 0 6px rgba(240,180,41,.4)}
+.badge{font-size:9px;padding:3px 8px;border-radius:6px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.badge.g{background:rgba(0,229,160,.15);color:var(--green);border:1px solid rgba(0,229,160,.25)}
+.badge.r{background:rgba(255,71,87,.15);color:var(--red);border:1px solid rgba(255,71,87,.25)}
+.badge.b{background:rgba(77,159,255,.15);color:var(--blue);border:1px solid rgba(77,159,255,.25)}
+.badge.y{background:rgba(240,180,41,.15);color:var(--accent);border:1px solid rgba(240,180,41,.25)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.card-title{font-size:9px;font-family:'JetBrains Mono',monospace;font-weight:600;letter-spacing:.06em;color:var(--accent);margin-bottom:8px;text-transform:uppercase}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.col{flex:1;min-width:100px}
+.price{font-size:22px;font-family:'JetBrains Mono',monospace;font-weight:700}
+.price.sm{font-size:14px}
+.mono{font-family:'JetBrains Mono',monospace}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mb{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;font-family:'JetBrains Mono',monospace}
+.mb .l{color:var(--text2)}
+.mb .v{font-weight:500}
+.mb .v.g{color:var(--green)}
+.mb .v.r{color:var(--red)}
+.btn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:active{transform:scale(.96)}
+.btn.s{border-color:rgba(0,229,160,.3);color:var(--green)}
+.btn.s:hover{background:rgba(0,229,160,.1)}
+.btn.x{border-color:rgba(255,71,87,.3);color:var(--red)}
+.btn.x:hover{background:rgba(255,71,87,.1)}
+.trade-entry{padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:'JetBrains Mono',monospace}
+.trade-entry:last-child{border-bottom:none}
+.trade-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.trade-dir{font-weight:600}
+.trade-dir.u{color:var(--green)}
+.trade-dir.d{color:var(--red)}
+.trade-detail{display:flex;gap:10px;color:var(--text2);font-size:10px}
+.trade-pnl{font-weight:600}
+.trade-pnl.g{color:var(--green)}
+.trade-pnl.r{color:var(--red)}
+.log-line{padding:3px 0;font-size:10px;font-family:'JetBrains Mono',monospace;border-bottom:1px solid rgba(42,42,62,.3);display:flex;gap:6px}
+.log-line .t{color:var(--muted);flex-shrink:0}
+.log-line .m.info{color:var(--text2)}
+.log-line .m.warn{color:var(--accent)}
+.log-line .m.err{color:var(--red)}
+.log-line .m.ok{color:var(--green)}
+.log-box{max-height:400px;overflow-y:auto}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{padding:6px 14px;border-radius:6px;font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:600;background:var(--surface);border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s}
+.tab.a{background:var(--accent);color:#000;border-color:var(--accent)}
+.tab:hover{border-color:var(--accent)}
+.toggle{width:36px;height:20px;border-radius:10px;border:none;background:var(--border);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.toggle.on{background:var(--green)}
+.toggle::after{content:'';width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:transform .2s}
+.toggle.on::after{transform:translateX(16px)}
+.hide{display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.loading{text-align:center;color:var(--muted);padding:20px;font-size:11px;font-family:'JetBrains Mono',monospace}
+.mt-2{margin-top:10px}
+</style>
 </head>
-
 <body>
-    <div class="toast" id="toast"></div>
 
-    <div class="header">
-        <div class="header-top">
-            <div class="logo">POLY<span>BOT</span></div>
-            <div class="status-badge" id="statusBadge">
-                <div class="pulse" id="statusDot"></div>
-                <span id="statusText">LIVE</span>
-            </div>
-        </div>
-        <div class="bot-controls">
-            <button class="ctrl-btn start" id="btnStart" onclick="controlBot('start')">&#9654; START</button>
-            <button class="ctrl-btn stop" id="btnStop" onclick="controlBot('stop')">&#9632; STOP</button>
-        </div>
-        <div class="last-update" id="lastUpdate">Connecting to VPS...</div>
+<h1>POLYBOT <small id="ver">v6.0</small></h1>
+
+<div class="status-line">
+  <span><span class="dot g" id="statusDot"></span><span id="statusText">LIVE</span></span>
+  <span class="badge b" id="modeBadge">DRY RUN</span>
+  <span id="botStatus">Engine: <span id="engineState">STOPPED</span></span>
+  <span id="timeDisplay" style="color:var(--muted);font-size:10px"></span>
+</div>
+
+<div class="tabs">
+  <div class="tab a" data-tab="main" onclick="switchTab(this)">Dashboard</div>
+  <div class="tab" data-tab="trades" onclick="switchTab(this)">Trades</div>
+  <div class="tab" data-tab="logs" onclick="switchTab(this)">Logs</div>
+  <div class="tab" data-tab="settings" onclick="switchTab(this)">Settings</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="tab-content" id="tab-main">
+  <div class="row" style="margin-bottom:10px;gap:8px">
+    <div class="col card" style="text-align:center">
+      <div style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">BTC/USDT</div>
+      <div class="price" id="btcPrice">--</div>
     </div>
-
-    <div class="tabbar">
-        <button class="tab active" onclick="showTab('dashboard', this)">
-            <span class="tab-icon">&#9672;</span>Dashboard
-        </button>
-        <button class="tab" onclick="showTab('logs', this)">
-            <span class="tab-icon">&#128203;</span>Logs
-        </button>
-        <button class="tab" onclick="showTab('settings', this)">
-            <span class="tab-icon">&#9881;</span>Settings
-        </button>
+    <div class="col card" style="text-align:center">
+      <div style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">CHAINLINK</div>
+      <div class="price" style="font-size:18px;color:var(--text2)" id="chainlinkPrice">--</div>
     </div>
-
-    <!-- Dashboard Page -->
-    <div class="page active" id="page-dashboard">
-        <div class="mode-banner dry" id="modeBanner">&#129514; DRY RUN MODE — No real trades being placed</div>
-        <div class="mode-banner blocked" id="riskBanner" style="display:none;"></div>
-
-        <div class="price-banner">
-            <div>
-                <div class="price-label">BTC/USDT</div>
-                <div class="price-value" id="btcPrice">--</div>
-            </div>
-            <div style="text-align:right;">
-                <div class="price-label">SIGNAL</div>
-                <div class="signal-badge skip" id="signalBadge">&#9208; WAITING</div>
-            </div>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value green" id="statBalance">$0.00</div>
-                <div class="stat-label" id="profitLabel">TOTAL P&L</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="statPnl">0.0x</div>
-                <div class="stat-label" id="pnlLabel">RISK RATIO</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value green" id="statSuccess">--</div>
-                <div class="stat-label" id="winRateLabel">WIN RATE %</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value blue" id="statTotal">--</div>
-                <div class="stat-label" id="tradesLabel">TOTAL TRADES</div>
-            </div>
-        </div>
-
-        <!-- Risk Panel -->
-        <div class="card" id="riskCard" style="display:none;">
-            <div class="card-title" style="color:var(--purple);">&#128737; RISK STATUS</div>
-            <div id="riskStats"></div>
-        </div>
-
-        <!-- Signal Analysis Panel -->
-        <div class="card" id="signalCard" style="display:none;">
-            <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:0.1em; margin-bottom:12px;">&#128202; v5.1 SIGNAL ANALYSIS</div>
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="sigDirection">--</div><div class="stat-label">DIRECTION</div></div>
-                <div class="stat-card"><div class="stat-value" id="sigConfidence">--</div><div class="stat-label">CONFIDENCE</div></div>
-                <div class="stat-card"><div class="stat-value" id="sigEdge">--</div><div class="stat-label">ODDS EDGE</div></div>
-                <div class="stat-card"><div class="stat-value" id="sigAgreement">--</div><div class="stat-label">SIGNAL AGREEMENT</div></div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
-                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">MOMENTUM 60s</div>
-                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigMom60">--</div>
-                </div>
-                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
-                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">BREAKEVEN WIN RATE</div>
-                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigBE">--</div>
-                </div>
-                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
-                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">BTC vs STRIKE</div>
-                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigDiff">--</div>
-                </div>
-                <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
-                    <div style="font-size:9px; color:var(--muted); letter-spacing:0.05em;">TOKEN PRICE</div>
-                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="sigToken">--</div>
-                </div>
-            </div>
-            <div style="margin-top:8px; font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; line-height:1.4;" id="sigReason">--</div>
-            <div style="margin-top:8px; font-size:10px; font-family:'JetBrains Mono',monospace; line-height:1.4;" id="sigRiskReason"></div>
-        </div>
-
-        <!-- 5-Minute Market Window -->
-        <div class="card" id="windowCard" style="display:none;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:0.1em; margin-bottom:4px;">CURRENT 5-MIN WINDOW</div>
-                    <div style="font-size:28px; font-family:'JetBrains Mono',monospace; font-weight:700;" id="windowTimer">--:--</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;">MARKET ODDS</div>
-                    <div style="font-size:14px; font-family:'JetBrains Mono',monospace; font-weight:600;">
-                        <span style="color:var(--green);" id="windowUp">--</span>&nbsp;/&nbsp;<span style="color:var(--red);" id="windowDown">--</span>
-                    </div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;">STATUS</div>
-                    <div style="font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:600;" id="windowStatus">--</div>
-                </div>
-            </div>
-        </div>
-
-        <button class="refresh-btn" onclick="fetchAll()">&#10227; REFRESH</button>
-
-        <!-- Trade History -->
-        <div class="card" style="margin-bottom: 80px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <div class="card-title" style="margin-bottom:0;">&#128203; TRADE HISTORY</div>
-                <div style="display:flex; gap:4px;">
-                    <button class="filter-btn" onclick="exportTrades('json')" title="Export JSON" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">&#11015; JSON</button>
-                    <button class="filter-btn" onclick="exportTrades('csv')" title="Export CSV" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">&#11015; CSV</button>
-                    <button class="filter-btn" onclick="setFilter('1h', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">1H</button>
-                    <button class="filter-btn" onclick="setFilter('24h', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">24H</button>
-                    <button class="filter-btn active" onclick="setFilter('all', this)" style="padding:4px 8px; border-radius:4px; font-size:9px; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); cursor:pointer;">ALL</button>
-                </div>
-            </div>
-            <div id="tradeHistory">
-                <div class="loading"><div class="spinner"></div><br>Loading trades...</div>
-            </div>
-        </div>
+    <div class="col card" style="text-align:center">
+      <div style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">POLYMARKET</div>
+      <div style="font-size:18px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent)" id="polyMarket">--</div>
     </div>
+  </div>
 
-    <!-- Logs Page -->
-    <div class="page" id="page-logs">
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <button class="refresh-btn" style="flex:1; margin-bottom:0;" onclick="fetchLogs()">&#10227; REFRESH</button>
-            <button class="danger-btn" style="flex:0; width:auto; padding:12px 16px; margin-top:0;" onclick="clearLogs()">&#128465;</button>
-        </div>
-        <div class="card">
-            <div class="card-title">FULL BOT LOG</div>
-            <div id="fullLogs" style="max-height:65vh; overflow-y:auto;">
-                <div class="loading"><div class="spinner"></div><br>Loading...</div>
-            </div>
-        </div>
+  <div class="card" id="signalCard" style="display:none">
+    <div class="card-title">Signal</div>
+    <div class="row" style="align-items:center;gap:10px">
+      <div style="font-size:16px;font-family:'JetBrains Mono',monospace;font-weight:700" id="sigDir">--</div>
+      <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div id="confBar" style="height:100%;border-radius:3px;width:0%;transition:width .4s"></div>
+      </div>
+      <div style="font-size:13px;font-family:'JetBrains Mono',monospace;font-weight:600" id="sigConf">--</div>
     </div>
-
-    <!-- Settings Page -->
-    <div class="page" id="page-settings">
-        <div class="card">
-            <div class="card-title">&#128279; VPS CONNECTION</div>
-            <div class="setting-group">
-                <label class="setting-label">VPS API URL</label>
-                <input class="setting-input" id="vpsUrl" value="http://127.0.0.1:3000">
-                <div class="setting-hint">Your PolyBot API server</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">AUTO REFRESH</label>
-                <select class="setting-input setting-select" id="refreshInterval">
-                    <option value="15000">Every 15 seconds</option>
-                    <option value="30000" selected>Every 30 seconds</option>
-                    <option value="60000">Every 1 minute</option>
-                    <option value="0">Manual only</option>
-                </select>
-            </div>
-            <button class="save-btn" onclick="saveConnectionSettings()">SAVE CONNECTION</button>
-        </div>
-
-        <div class="card">
-            <div class="card-title">&#128202; STRATEGY SETTINGS</div>
-            <div id="liveWarning" class="warn-box" style="display:none;">&#9888;&#65039; LIVE TRADING IS ON — Real trades will be placed with real money!</div>
-            <div class="toggle-row">
-                <span class="toggle-label">&#129514; Dry Run Mode</span>
-                <button class="toggle on" id="toggleDryRun" onclick="toggleDryRun()"></button>
-            </div>
-            <div class="setting-hint" style="margin-bottom:14px;">When ON, the bot logs signals but does NOT place real trades.</div>
-            <div class="sep"></div>
-            <div class="setting-group">
-                <label class="setting-label">BET SIZE (USDC)</label>
-                <input class="setting-input" id="betSize" type="number" value="2" min="0.1" step="0.5">
-                <div class="setting-hint">Amount per trade in USDC</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">MAX TRADES PER HOUR</label>
-                <input class="setting-input" id="maxTrades" type="number" value="8" min="1" max="50">
-                <div class="setting-hint">v5.1 recommended: 6-10. Prevents overtrading on low-edge signals.</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">MIN CONFIDENCE %</label>
-                <input class="setting-input" id="minConfidence" type="number" value="65" min="10" max="100">
-                <div class="setting-hint">Minimum signal confidence to enter. 65+ recommended.</div>
-            </div>
-            <button class="save-btn" onclick="saveStrategySettings()">SAVE STRATEGY</button>
-        </div>
-
-        <div class="card">
-            <div class="card-title" style="color:var(--purple);">&#128737; RISK MANAGEMENT</div>
-            <div class="setting-group">
-                <label class="setting-label">DAILY LOSS LIMIT (USDC)</label>
-                <input class="setting-input" id="dailyLossLimit" type="number" value="10" min="1" step="1">
-                <div class="setting-hint">Bot stops trading after losing this much in a day.</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">MAX CONSECUTIVE LOSSES</label>
-                <input class="setting-input" id="maxConsecutiveLosses" type="number" value="4" min="1" max="20">
-                <div class="setting-hint">Cooldown triggers after this many back-to-back losses.</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">MAX DRAWDOWN %</label>
-                <input class="setting-input" id="maxDrawdown" type="number" value="25" min="5" max="100">
-                <div class="setting-hint">Percent drop from peak bankroll before stopping.</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">MAX TOKEN PRICE</label>
-                <input class="setting-input" id="maxTokenPrice" type="number" value="0.75" min="0.51" max="0.95" step="0.01">
-                <div class="setting-hint">Don't buy tokens above this price (poor ROI).</div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">INITIAL BANKROLL (USDC)</label>
-                <input class="setting-input" id="initialBankroll" type="number" value="100" min="10" step="10">
-                <div class="setting-hint">Used for drawdown calculations. Set to your starting balance.</div>
-            </div>
-            <button class="purple-btn" onclick="resetCircuitBreaker()">&#128260; RESET CIRCUIT BREAKER</button>
-            <div class="setting-hint">Only use if you understand why it tripped.</div>
-            <button class="save-btn" onclick="saveRiskSettings()">SAVE RISK SETTINGS</button>
-        </div>
-
-        <div class="card">
-            <div class="card-title" style="color:var(--red);">&#9888;&#65039; DANGER ZONE</div>
-            <button class="danger-btn" onclick="clearTrades()">Clear All Trade History</button>
-            <button class="danger-btn" onclick="clearLogs()">Clear All Logs</button>
-        </div>
-
-        <div class="card">
-            <div class="card-title">ABOUT</div>
-            <div style="font-size: 11px; color: var(--muted); line-height: 2; font-family: 'JetBrains Mono', monospace;">
-                <div>Bot: PolyBot v5.1 (Odds-Edge + Risk Managed)</div>
-                <div>Engine: Odds Mispricing + Momentum Detection</div>
-                <div>Entry Window: 120-250s remaining per 5-min candle</div>
-                <div>Order Type: GTC Market Orders @ capped price + slippage guard</div>
-                <div>Market: Polymarket BTC Up/Down 5-Min</div>
-                <div>Win Rate Target: 55-70% (Directional)</div>
-                <div>v5.1: Risk manager, P&L tracking, circuit breakers, health checks</div>
-            </div>
-        </div>
+    <div class="row" style="margin-top:6px;gap:12px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text2)">
+      <span>Edge: <strong id="sigEdge" style="color:var(--accent)">--</strong></span>
+      <span>Agreement: <strong id="sigAgree">--</strong></span>
+      <span>Token: <strong id="sigToken">--</strong></span>
     </div>
+  </div>
 
-    <script>
-        let VPS_URL = localStorage.getItem('vpsUrl') || 'http://127.0.0.1:3000';
-        let autoRefreshTimer = null;
-        let isDryRun = true;
-        let botRunning = false;
-        let currentFilter = 'all';
-        document.getElementById('vpsUrl').value = VPS_URL;
+  <div class="card" id="marketCard" style="display:none">
+    <div class="card-title">Market Window</div>
+    <div class="row" style="align-items:center;gap:12px">
+      <div><span style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">Time</span><div style="font-size:20px;font-family:'JetBrains Mono',monospace;font-weight:700" id="winTime">--</div></div>
+      <div><span style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">UP</span><div style="font-size:16px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--green)" id="winUp">--</div></div>
+      <div><span style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">DOWN</span><div style="font-size:16px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--red)" id="winDown">--</div></div>
+      <div><span style="font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace">Status</span><div style="font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600" id="winStatus">--</div></div>
+    </div>
+  </div>
 
-        function showTab(name, btn) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('page-' + name).classList.add('active');
-            btn.classList.add('active');
-            if (name === 'logs') fetchLogs();
-        }
+  <div class="card" id="riskCard" style="display:none">
+    <div class="card-title">Risk <span id="riskBadge" class="badge g" style="font-size:8px;margin-left:8px">OK</span></div>
+    <div id="riskContent"></div>
+  </div>
 
-        function showToast(msg, type = '') {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => toast.className = 'toast', 2500);
-        }
+  <div class="card" id="moduleCard">
+    <div class="card-title">Modules</div>
+    <div class="grid2" id="moduleGrid"></div>
+  </div>
+</div>
 
-        async function controlBot(action) {
-            const btn = document.getElementById('btn' + action.charAt(0).toUpperCase() + action.slice(1));
-            if (btn) btn.disabled = true;
-            try {
-                showToast(`${action === 'start' ? '&#9654;' : action === 'stop' ? '&#9632;' : '&#8635;'} ${action.toUpperCase()}...`);
-                await fetch(VPS_URL + '/' + action, { method: 'POST' });
-                showToast(`Bot ${action === 'start' ? 'started' : action === 'stop' ? 'stopped' : 'restarted'}`, 'success');
-                setTimeout(fetchAll, 1500);
-            } catch (e) { showToast(e.message, 'error'); }
-            finally { if (btn) btn.disabled = false; }
-        }
+<!-- TRADES -->
+<div class="tab-content hide" id="tab-trades">
+  <div class="row" style="margin-bottom:8px;gap:6px">
+    <div class="btn" onclick="setFilter('1h')">1H</div>
+    <div class="btn" onclick="setFilter('24h')">24H</div>
+    <div class="btn a" onclick="setFilter('all')" id="filterAll">ALL</div>
+    <div class="btn" onclick="exportTrades('json')" style="margin-left:auto">JSON</div>
+    <div class="btn" onclick="exportTrades('csv')">CSV</div>
+  </div>
+  <div class="card" id="tradeList"></div>
+</div>
 
-        async function fetchAll() {
-            try {
-                document.getElementById('lastUpdate').textContent = 'Refreshing...';
-                const resp = await fetch(VPS_URL + '/status', { timeout: 8000 });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                const data = await resp.json();
-                updateDashboard(data);
-                fetchTrades();
-                document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
-            } catch (err) { setOffline(err.message); }
-        }
+<!-- LOGS -->
+<div class="tab-content hide" id="tab-logs">
+  <div class="card">
+    <div class="card-title">Bot Log <span id="logCount" style="font-weight:400;color:var(--text2)"></span></div>
+    <div class="log-box" id="logBox"><div class="loading">Loading...</div></div>
+  </div>
+</div>
 
-        function updateDashboard(data) {
-            botRunning = data.running;
-            isDryRun = data.dry_run;
+<!-- SETTINGS -->
+<div class="tab-content hide" id="tab-settings">
+  <div class="card">
+    <div class="card-title">Trading</div>
+    <div class="mb"><span class="l">Dry Run</span><button class="toggle on" id="toggleDry" onclick="tdry()"></button></div>
+    <div id="liveWarn" class="hide" style="margin-bottom:8px;padding:8px;border-radius:6px;background:rgba(255,71,87,.15);border:1px solid rgba(255,71,87,.3);color:var(--red);font-size:10px;font-family:'JetBrains Mono',monospace">&#9888; LIVE MODE</div>
+    <div class="mb"><span class="l">Bet Size (USDC)</span><span class="v"><input class="mono" id="sBetSize" type="number" value="1" min="0.1" step="0.5" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);font-size:11px;text-align:right"></span></div>
+    <div class="mb"><span class="l">Max Trades/hr</span><span class="v"><input class="mono" id="sMaxTrades" type="number" value="8" min="1" max="50" style="width:50px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);font-size:11px;text-align:right"></span></div>
+    <div class="mb"><span class="l">Min Confidence %</span><span class="v"><input class="mono" id="sMinConf" type="number" value="50" min="10" max="100" style="width:50px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);font-size:11px;text-align:right"></span></div>
+    <div class="mb"><span class="l">Daily Loss Limit (USDC)</span><span class="v"><input class="mono" id="sDailyLoss" type="number" value="10" min="1" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);font-size:11px;text-align:right"></span></div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <div class="btn s" onclick="saveStrategy()" style="flex:1;text-align:center">Save Strategy</div>
+      <div class="btn" onclick="saveRisk()" style="flex:1;text-align:center">Save Risk</div>
+    </div>
+  </div>
 
-            const badge = document.getElementById('statusBadge');
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('statusText');
+  <div class="card">
+    <div class="card-title">Actions</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="btn s" onclick="ctrl('start')">&#9654; Start</div>
+      <div class="btn x" onclick="ctrl('stop')">&#9632; Stop</div>
+      <div class="btn" onclick="resetBreaker()">&#128260; Reset Breaker</div>
+      <div class="btn" onclick="clearTrades()">Clear Trades</div>
+      <div class="btn" onclick="clearLogs()">Clear Logs</div>
+    </div>
+  </div>
+</div>
 
-            // Risk status overrides bot status display
-            const risk = data.risk || {};
-            const riskBlocked = risk.circuit_breaker_tripped || (risk.daily_pnl !== undefined && risk.daily_pnl <= -(data.risk?.daily_loss_limit || 10));
+<div class="toast" id="toast"></div>
 
-            if (data.running && !riskBlocked) {
-                badge.classList.remove('offline', 'blocked');
-                dot.classList.remove('off', 'blocked');
-                text.textContent = 'LIVE'; text.style.color = 'var(--green)';
-            } else if (riskBlocked) {
-                badge.classList.remove('offline'); badge.classList.add('blocked');
-                dot.classList.remove('off'); dot.classList.add('blocked');
-                text.textContent = 'BLOCKED'; text.style.color = 'var(--purple)';
-            } else {
-                badge.classList.add('offline'); badge.classList.remove('blocked');
-                dot.classList.add('off'); dot.classList.remove('blocked');
-                text.textContent = 'STOPPED'; text.style.color = 'var(--red)';
-            }
+<script>
+let API = 'http://127.0.0.1:3000';
+let refreshInt = 10000;
+let timer, logTimer;
+let filter = 'all';
 
-            const modeBanner = document.getElementById('modeBanner');
-            if (data.dry_run) {
-                modeBanner.className = 'mode-banner dry';
-                modeBanner.innerHTML = '&#129514; DRY RUN MODE — No real trades being placed';
-            } else {
-                modeBanner.className = 'mode-banner live';
-                modeBanner.innerHTML = '&#128176; LIVE TRADING — Real orders are being placed';
-            }
+function q(id) { return document.getElementById(id); }
 
-            // Risk banner
-            const riskBanner = document.getElementById('riskBanner');
-            if (riskBlocked && risk.circuit_breaker_reason) {
-                riskBanner.style.display = 'flex';
-                riskBanner.innerHTML = '&#128737; ' + risk.circuit_breaker_reason;
-            } else if (riskBlocked && risk.consecutive_losses >= (data.risk?.max_consecutive_losses || 4)) {
-                riskBanner.style.display = 'flex';
-                riskBanner.innerHTML = '&#128737; Consecutive loss streak: ' + risk.consecutive_losses;
-            } else {
-                riskBanner.style.display = 'none';
-            }
+function toast(m, t) {
+  const el = q('toast');
+  el.textContent = m; el.className = 'toast show ' + (t||'');
+  setTimeout(() => el.className = 'toast', 2000);
+}
 
-            updateSignalPanel(data.info);
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('a'));
+  el.classList.add('a');
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hide'));
+  const tab = q('tab-' + el.dataset.tab);
+  tab.classList.remove('hide');
+  if (el.dataset.tab === 'logs') { fetchLogs(); startLogPoll(); }
+  else stopLogPoll();
+  if (el.dataset.tab === 'trades') fetchTrades();
+}
 
-            const wins = data.wins || 0;
-            const losses = data.losses || 0;
-            const total = data.total_trades || 0;
-            const bSize = data.bet_size || 2;
+async function ctrl(a) {
+  try { await fetch(API + '/' + a, { method: 'POST' }); toast(a==='start'?'Started':'Stopped','success'); setTimeout(fetchAll,1500); }
+  catch(e) { toast(e.message,'error'); }
+}
 
-            // v5.1: Use actual P&L from backend if available
-            const totalPnl = data.total_pnl !== undefined ? data.total_pnl : ((wins * bSize * 0.9) - (losses * bSize));
-            document.getElementById('statBalance').textContent = (totalPnl >= 0 ? '+' : '-') + '$' + Math.abs(totalPnl).toFixed(2);
-            document.getElementById('statBalance').className = 'stat-value ' + (totalPnl >= 0 ? 'green' : 'red');
-            document.getElementById('profitLabel').textContent = data.total_pnl !== undefined ? 'TOTAL P&L' : 'EST. PROFIT';
+async function fetchAll() {
+  try {
+    const r = await fetch(API + '/status');
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    render(d);
+  } catch(e) { setOffline(e.message); }
+}
 
-            const riskRatio = losses > 0 ? ((wins * 0.9) / losses).toFixed(1) : (wins > 0 ? '∞' : '0.0');
-            document.getElementById('statPnl').textContent = riskRatio + 'x';
-            document.getElementById('statPnl').className = 'stat-value ' + (parseFloat(riskRatio) >= 1 ? 'green' : 'red');
+function render(d) {
+  // Status
+  const running = d.running;
+  const dry = d.dry_run;
+  const risk = d.risk || {};
+  const blocked = risk.circuit_breaker_tripped;
+  const dot = q('statusDot'); const st = q('statusText');
+  dot.className = 'dot ' + (blocked ? 'y' : running ? 'g' : 'r');
+  st.textContent = blocked ? 'BLOCKED' : running ? 'LIVE' : 'STOPPED';
+  st.style.color = blocked ? 'var(--accent)' : running ? 'var(--green)' : 'var(--red)';
+  q('engineState').textContent = running ? 'RUNNING' : 'STOPPED';
+  q('engineState').style.color = running ? 'var(--green)' : 'var(--red)';
+  q('modeBadge').textContent = dry ? 'DRY RUN' : 'LIVE';
+  q('modeBadge').className = 'badge ' + (dry ? 'b' : 'g');
 
-            document.getElementById('statSuccess').textContent = (data.success_rate || 0) + '%';
-            document.getElementById('statTotal').textContent = `${total} (W:${wins}/L:${losses})`;
+  // Prices
+  if (d.btc_price) q('btcPrice').textContent = '$'+d.btc_price.toLocaleString('en-US',{minimumFractionDigits:2});
+  const cl = d.chainlink_price;
+  q('chainlinkPrice').textContent = cl > 0 ? '$'+cl.toLocaleString('en-US',{minimumFractionDigits:2}) : 'OFFLINE';
+  q('chainlinkPrice').style.color = cl > 0 ? 'var(--green)' : 'var(--red)';
 
-            updateWindowTimer(data.info);
-            updateRiskPanel(data.risk);
+  // Market
+  const info = d.info || {};
+  if (info.slug) {
+    q('polyMarket').textContent = info.slug.replace('btc-updown-5m-','');
+    q('polyMarket').style.color = 'var(--accent)';
+  } else {
+    q('polyMarket').textContent = 'SCANNING';
+    q('polyMarket').style.color = 'var(--text2)';
+  }
 
-            if (data.btc_price) {
-                document.getElementById('btcPrice').textContent = '$' + data.btc_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
+  // Signal
+  const sigCard = q('signalCard');
+  const s = info.signals || {};
+  if (s.odds_dir && info.confidence > 0) {
+    sigCard.style.display = 'block';
+    const dir = s.odds_dir;
+    q('sigDir').textContent = dir === 'UP' ? '\u25B2 UP' : '\u25BC DOWN';
+    q('sigDir').style.color = dir === 'UP' ? 'var(--green)' : 'var(--red)';
+    const conf = info.confidence || 0;
+    q('sigConf').textContent = conf.toFixed(1)+'%';
+    q('sigConf').style.color = conf >= 60 ? 'var(--green)' : conf >= 40 ? 'var(--accent)' : 'var(--red)';
+    const bar = q('confBar');
+    bar.style.width = Math.min(conf,100)+'%';
+    bar.style.background = conf >= 60 ? 'var(--green)' : conf >= 40 ? 'var(--accent)' : 'var(--red)';
+    q('sigEdge').textContent = (s.odds_edge||0).toFixed(1)+'\u00A2';
+    q('sigAgree').textContent = (s.agreement||0).toFixed(0)+'%';
+    q('sigToken').textContent = '$'+(s.token_price||0).toFixed(3);
+  } else sigCard.style.display = 'none';
 
-            document.getElementById('btnStart').disabled = data.running;
-            document.getElementById('btnStop').disabled = !data.running;
+  // Market window
+  const winCard = q('marketCard');
+  if (info.time_remaining !== undefined) {
+    winCard.style.display = 'block';
+    const secs = info.time_remaining;
+    q('winTime').textContent = Math.floor(secs/60)+':'+(secs%60).toString().padStart(2,'0');
+    q('winTime').style.color = secs <= 30 ? 'var(--red)' : secs <= 120 ? 'var(--accent)' : 'var(--green)';
+    q('winUp').textContent = 'UP ' + Math.round((info.up_price||0)*100)+'%';
+    q('winDown').textContent = 'DOWN ' + Math.round((info.down_price||0)*100)+'%';
+    const ws = q('winStatus');
+    if (secs > 250) { ws.textContent = 'WAITING'; ws.style.color = 'var(--text2)'; }
+    else if (secs >= 120) { ws.textContent = 'ENTRY'; ws.style.color = 'var(--green)'; }
+    else { ws.textContent = 'CLOSED'; ws.style.color = 'var(--red)'; }
+  } else winCard.style.display = 'none';
 
-            const toggle = document.getElementById('toggleDryRun');
-            toggle.className = data.dry_run ? 'toggle on' : 'toggle';
-            document.getElementById('liveWarning').style.display = data.dry_run ? 'none' : 'block';
-            if (data.bet_size) document.getElementById('betSize').value = data.bet_size;
-        }
+  // Stats
+  const wins = d.wins||0, losses = d.losses||0, total = d.total_trades||0;
+  const pnl = d.total_pnl !== undefined ? d.total_pnl : (wins*2*0.9-losses*2);
 
-        function updateSignalPanel(info) {
-            const card = document.getElementById('signalCard');
-            if (!info || !info.signals || Object.keys(info.signals).length === 0) {
-                card.style.display = 'none';
-                return;
-            }
-            card.style.display = 'block';
-            const s = info.signals;
-            const dirEl = document.getElementById('sigDirection');
-            if (info.confidence > 0 && s.odds_dir) {
-                dirEl.textContent = s.odds_dir === 'UP' ? '&#9650; UP' : '&#9660; DOWN';
-                dirEl.className = 'stat-value ' + (s.odds_dir === 'UP' ? 'green' : 'red');
-            } else {
-                dirEl.textContent = 'NONE';
-                dirEl.className = 'stat-value';
-                dirEl.style.color = 'var(--muted)';
-            }
-            document.getElementById('sigConfidence').textContent = (info.confidence || 0).toFixed(1) + '%';
-            const confEl = document.getElementById('sigConfidence');
-            const conf = info.confidence || 0;
-            confEl.className = 'stat-value ' + (conf >= 60 ? 'green' : conf >= 40 ? '' : 'red');
-            const edgeEl = document.getElementById('sigEdge');
-            edgeEl.textContent = (s.odds_edge || 0).toFixed(1) + '¢';
-            edgeEl.className = 'stat-value ' + ((s.odds_edge || 0) > 10 ? 'green' : (s.odds_edge || 0) > 4 ? '' : 'red');
-            document.getElementById('sigAgreement').textContent = (s.agreement || 0).toFixed(0) + '%';
-            const momEl = document.getElementById('sigMom60');
-            const mom = s.mom_60s || 0;
-            momEl.textContent = mom.toFixed(1);
-            momEl.style.color = mom > 10 ? 'var(--green)' : mom < -10 ? 'var(--red)' : 'var(--muted)';
-            document.getElementById('sigBE').textContent = (s.breakeven_wr || 50).toFixed(1) + '%';
-            const diffEl = document.getElementById('sigDiff');
-            const diff = s.diff_pct || 0;
-            diffEl.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3) + '%';
-            diffEl.style.color = Math.abs(diff) > 0.1 ? 'var(--green)' : Math.abs(diff) > 0.05 ? 'var(--accent)' : 'var(--muted)';
-            document.getElementById('sigToken').textContent = '$' + (s.token_price || 0).toFixed(3);
-            document.getElementById('sigReason').textContent = s.odds_reason || '--';
-            const riskReason = document.getElementById('sigRiskReason');
-            if (info.risk_status === 'BLOCKED') {
-                riskReason.textContent = 'RISK: ' + (info.risk_reason || 'Blocked');
-                riskReason.style.color = 'var(--purple)';
-            } else {
-                riskReason.textContent = '';
-            }
-            const badge = document.getElementById('signalBadge');
-            if (info.confidence > 0 && s.odds_dir) {
-                badge.textContent = s.odds_dir === 'UP' ? '&#9650; UP' : '&#9660; DOWN';
-                badge.className = 'signal-badge ' + (s.odds_dir === 'UP' ? 'up' : 'down');
-            } else {
-                badge.textContent = '&#9208; WAITING';
-                badge.className = 'signal-badge skip';
-            }
-        }
+  // Risk
+  const rc = q('riskCard');
+  if (risk && risk.daily_pnl !== undefined) {
+    rc.style.display = 'block';
+    const dd = risk.drawdown_pct >= 15 ? 'r' : risk.drawdown_pct >= 8 ? 'r' : 'g';
+    q('riskBadge').textContent = blocked ? 'TRIPPED' : 'OK';
+    q('riskBadge').className = 'badge ' + (blocked ? 'r' : 'g');
+    q('riskContent').innerHTML = `
+      <div class="grid2" style="font-size:10px;font-family:'JetBrains Mono',monospace">
+        <div>Daily P&L: <strong style="color:${risk.daily_pnl>=0?'var(--green)':'var(--red)'}">${risk.daily_pnl>=0?'+':''}$${risk.daily_pnl.toFixed(2)}</strong></div>
+        <div>Drawdown: <strong>${risk.drawdown_pct.toFixed(1)}%</strong></div>
+        <div>Consecutive Losses: <strong>${risk.consecutive_losses}</strong></div>
+        <div>Bankroll: <strong>$${risk.current_bankroll.toFixed(2)}</strong></div>
+        <div>Wins: <strong style="color:var(--green)">${risk.daily_wins}</strong> / Losses: <strong style="color:var(--red)">${risk.daily_losses}</strong></div>
+        <div>Total Trades: <strong>${total}</strong> | P&L: <strong style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}</strong></div>
+        <div>Win Rate: <strong>${d.success_rate||0}%</strong></div>
+      </div>
+    `;
+  } else rc.style.display = 'none';
 
-        function updateRiskPanel(risk) {
-            const card = document.getElementById('riskCard');
-            if (!risk) { card.style.display = 'none'; return; }
-            card.style.display = 'block';
-            const drawdownClass = risk.drawdown_pct >= 20 ? 'danger' : risk.drawdown_pct >= 10 ? 'warn' : 'ok';
-            const consecClass = risk.consecutive_losses >= 3 ? 'danger' : risk.consecutive_losses >= 2 ? 'warn' : 'ok';
-            const dailyClass = risk.daily_pnl < -5 ? 'danger' : risk.daily_pnl < 0 ? 'warn' : 'ok';
-            document.getElementById('riskStats').innerHTML = `
-                <div class="risk-stat"><span class="risk-stat-label">Daily P&L</span><span class="risk-stat-value ${dailyClass}">${risk.daily_pnl >= 0 ? '+' : ''}$${risk.daily_pnl.toFixed(2)}</span></div>
-                <div class="risk-stat"><span class="risk-stat-label">Daily W/L</span><span class="risk-stat-value">${risk.daily_wins}W / ${risk.daily_losses}L</span></div>
-                <div class="risk-stat"><span class="risk-stat-label">Consecutive Losses</span><span class="risk-stat-value ${consecClass}">${risk.consecutive_losses}</span></div>
-                <div class="risk-stat"><span class="risk-stat-label">Drawdown</span><span class="risk-stat-value ${drawdownClass}">${risk.drawdown_pct.toFixed(1)}%</span></div>
-                <div class="risk-stat"><span class="risk-stat-label">Bankroll</span><span class="risk-stat-value">$${risk.current_bankroll.toFixed(2)} / $${risk.peak_bankroll.toFixed(2)}</span></div>
-                <div class="risk-stat"><span class="risk-stat-label">Circuit Breaker</span><span class="risk-stat-value ${risk.circuit_breaker_tripped ? 'danger' : 'ok'}">${risk.circuit_breaker_tripped ? 'TRIPPED' : 'OK'}</span></div>
-            `;
-        }
+  // Modules
+  const mg = q('moduleGrid');
+  const mods = d.module_status || {};
+  mg.innerHTML = Object.entries(mods).map(([k,v]) => {
+    const active = v !== 'INACTIVE' && v !== 'DISABLED' && v !== 'STOPPED';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:10px;font-family:'JetBrains Mono',monospace">
+      <span class="dot ${active?'g':'r'}" style="width:6px;height:6px;box-shadow:none"></span>
+      <span style="color:var(--text2)">${k.replace(/_/g,' ')}</span>
+      <span style="margin-left:auto;font-weight:600;font-size:9px">${v}</span>
+    </div>`;
+  }).join('');
 
-        function updateWindowTimer(info) {
-            const card = document.getElementById('windowCard');
-            if (!info || info.time_remaining === undefined) { card.style.display = 'none'; return; }
-            card.style.display = 'block';
-            const secs = info.time_remaining;
-            const min = Math.floor(secs / 60);
-            const sec = secs % 60;
-            const timer = document.getElementById('windowTimer');
-            timer.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
-            if (secs <= 30) timer.style.color = 'var(--red)';
-            else if (secs <= 120) timer.style.color = 'var(--accent)';
-            else timer.style.color = 'var(--green)';
-            const upPct = Math.round((info.up_price || 0) * 100);
-            const downPct = Math.round((info.down_price || 0) * 100);
-            document.getElementById('windowUp').textContent = `UP ${upPct}%`;
-            document.getElementById('windowDown').textContent = `DOWN ${downPct}%`;
-            const statusEl = document.getElementById('windowStatus');
-            if (secs > 250) { statusEl.textContent = '&#9203; WAITING'; statusEl.style.color = 'var(--muted)'; }
-            else if (secs >= 120) { statusEl.textContent = '&#127919; ENTRY ZONE'; statusEl.style.color = 'var(--green)'; }
-            else { statusEl.textContent = '&#9209; CLOSED'; statusEl.style.color = 'var(--red)'; }
-        }
+  // Toggle sync
+  const tog = q('toggleDry');
+  if (dry !== tog.classList.contains('on')) {
+    tog.className = 'toggle ' + (dry ? 'on' : '');
+    q('liveWarn').className = dry ? 'hide' : '';
+  }
 
-        async function fetchBtcPrice() {
-            try {
-                const resp = await fetch('https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD');
-                const data = await resp.json();
-                document.getElementById('btcPrice').textContent = '$' + data.USD.toLocaleString();
-            } catch (e) { }
-        }
+  // Time
+  q('timeDisplay').textContent = new Date().toLocaleTimeString();
+}
 
-        function setFilter(p, btn) {
-            currentFilter = p;
-            document.querySelectorAll('.filter-btn').forEach(b => {
-                b.style.background = 'var(--bg)'; b.style.color = 'var(--text)'; b.style.borderColor = 'var(--border)'; b.classList.remove('active');
-            });
-            btn.style.background = 'var(--accent-dim)'; btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)'; btn.classList.add('active');
-            fetchTrades();
-        }
+function tdry() {
+  const t = q('toggleDry');
+  const on = t.classList.contains('on');
+  if (on && !confirm('ENABLE LIVE TRADING?')) return;
+  t.classList.toggle('on');
+  q('liveWarn').className = t.classList.contains('on') ? 'hide' : '';
+}
 
-        async function fetchTrades() {
-            try {
-                const resp = await fetch(VPS_URL + '/stats?period=' + currentFilter);
-                const data = resp.ok ? await resp.json() : {};
-                const trades = (data.history || []).reverse();
-                const historyDiv = document.getElementById('tradeHistory');
-                historyDiv.innerHTML = trades.length ? trades.map(renderTradeCard).join('') :
-                    '<div style="color:var(--muted); font-family:JetBrains Mono,monospace; font-size:11px; padding:10px;">No trades yet</div>';
-                if (trades.length > 0) {
-                    const latest = trades[0];
-                    const badge = document.getElementById('signalBadge');
-                    if (latest.direction === 'UP') { badge.className = 'signal-badge up'; badge.textContent = '&#9650; UP'; }
-                    else if (latest.direction === 'DOWN') { badge.className = 'signal-badge down'; badge.textContent = '&#9660; DOWN'; }
-                    else { badge.className = 'signal-badge skip'; badge.textContent = '&#9208; SKIP'; }
-                }
-            } catch (e) { console.error('Trades error:', e); }
-        }
+function saveStrategy() {
+  const dry = q('toggleDry').classList.contains('on');
+  const cfg = { dry_run: dry, bet_size: parseFloat(q('sBetSize').value)||1, max_trades_per_hour: parseInt(q('sMaxTrades').value)||8, min_confidence: parseInt(q('sMinConf').value)||50 };
+  if (!dry) cfg._confirm_live = true;
+  fetch(API+'/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})
+    .then(r=>r.json()).then(d=>{ if(d.status==='saved')toast('Saved','success'),fetchAll(); else toast(d.message||'Error','error'); })
+    .catch(e=>toast(e.message,'error'));
+}
 
-        function renderTradeCard(trade) {
-            const dir = trade.direction || 'SKIP';
-            const dirClass = dir.toLowerCase();
-            const price = trade.btc_price ? '$' + parseFloat(trade.btc_price).toLocaleString() : '--';
-            const time = trade.timestamp ? new Date(trade.timestamp).toLocaleTimeString() : '--';
-            const date = trade.timestamp ? new Date(trade.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
-            const confidence = trade.confidence ? trade.confidence.toFixed(1) + '%' : '--';
-            const betSize = trade.bet_size || 0;
-            const outcome = trade.outcome;
-            const isWin = outcome === 'win';
-            const isLoss = outcome === 'loss';
-            const isPending = outcome === null;
-            const isFailed = trade.status === 'failed';
-            const sig = trade.signals || {};
-            const oddsDir = sig.odds_dir || dir;
-            const oddsEdge = sig.odds_edge || 0;
-            const mom60 = sig.mom_60s !== undefined ? sig.mom_60s.toFixed(1) : '--';
-            const breakevenWR = sig.breakeven_wr ? sig.breakeven_wr.toFixed(1) + '%' : '--';
-            const agreement = sig.agreement ? sig.agreement.toFixed(0) + '%' : '--';
+function saveRisk() {
+  const dry = q('toggleDry').classList.contains('on');
+  const cfg = {
+    dry_run: dry, bet_size: parseFloat(q('sBetSize').value)||1, max_trades_per_hour: parseInt(q('sMaxTrades').value)||8, min_confidence: parseInt(q('sMinConf').value)||50,
+    risk_management: { enabled: true, daily_loss_limit_usdc: parseFloat(q('sDailyLoss').value)||10, max_consecutive_losses: 4, max_drawdown_pct: 15, max_token_price: 0.95, initial_bankroll: 100, cooldown_after_loss_seconds: 300, stale_feed_seconds: 45, toxic_lag_threshold: 1.5, use_kelly_sizing: false, kelly_fraction: 0.25 }
+  };
+  if (!dry) cfg._confirm_live = true;
+  fetch(API+'/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})
+    .then(r=>r.json()).then(d=>{ if(d.status==='saved')toast('Saved','success'),fetchAll(); else toast(d.message||'Error','error'); })
+    .catch(e=>toast(e.message,'error'));
+}
 
-            // v5.1: Prefer actual P&L from backend
-            let profitHtml = '';
-            if (trade.pnl !== undefined && trade.pnl !== null) {
-                const pnl = parseFloat(trade.pnl);
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">P&L:</span><span class="trade-detail-value ${pnl >= 0 ? 'profit' : 'loss'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</span></div>`;
-            } else if (isWin) {
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Profit:</span><span class="trade-detail-value profit">+$${(betSize * 0.9).toFixed(2)}</span></div>`;
-            } else if (isLoss) {
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Loss:</span><span class="trade-detail-value loss">-$${betSize.toFixed(2)}</span></div>`;
-            } else if (isFailed) {
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value loss">Failed</span></div>`;
-            } else {
-                profitHtml = `<div class="trade-detail-item"><span class="trade-detail-label">Status:</span><span class="trade-detail-value">Pending...</span></div>`;
-            }
+async function resetBreaker() {
+  if (!confirm('Reset circuit breaker?')) return;
+  try { await fetch(API+'/reset-risk',{method:'POST'}); toast('Reset','success'); fetchAll(); } catch(e){toast(e.message,'error');}
+}
 
-            const cardClass = isWin ? 'win' : (isLoss ? 'loss' : '');
-            const statusClass = isWin ? 'win' : (isLoss ? 'loss' : (isFailed ? 'failed' : (isPending ? 'pending' : 'simulated')));
-            const statusLabel = isWin ? '&#9989; WIN' : (isLoss ? '&#10060; LOSS' : (isFailed ? '&#10060; FAILED' : (isPending ? '&#9203; PENDING' : '&#129514; SIMULATED')));
-            const slug = trade.market_slug || '';
+async function clearTrades() {
+  if (!confirm('Clear all trades?')) return;
+  try { await fetch(API+'/clear-trades',{method:'POST'}); toast('Cleared','success'); fetchTrades(); } catch(e){toast(e.message,'error');}
+}
 
-            return `<div class="trade-card trade-expand ${cardClass}" onclick="this.classList.toggle('expanded'); this.querySelector('.trade-extra').classList.toggle('show')">
-                <div class="trade-top">
-                    <div class="trade-dir ${dirClass}">${dir === 'UP' ? '&#9650;' : '&#9660;'} ${dir} — $${betSize.toFixed(2)}</div>
-                    <span class="trade-status ${statusClass}">${statusLabel}</span>
-                </div>
-                <div class="trade-details">
-                    <div class="trade-detail-item"><span class="trade-detail-label">BTC Entry:</span><span class="trade-detail-value">${price}</span></div>
-                    <div class="trade-detail-item"><span class="trade-detail-label">Confidence:</span><span class="trade-detail-value">${confidence}</span></div>
-                    ${profitHtml}
-                    <div class="trade-detail-item"><span class="trade-detail-label">Date:</span><span class="trade-detail-value">${date} ${time}</span></div>
-                </div>
-                <div class="trade-extra">
-                    <div class="trade-extra-inner">
-                        <div style="font-size:10px; color:var(--muted); letter-spacing:0.05em; margin-bottom:6px;">v5.1 SIGNAL DETAILS</div>
-                        <div>Odds Direction: <strong style="color:${oddsDir === 'UP' ? 'var(--green)' : 'var(--red)'}">${oddsDir}</strong> (edge: ${oddsEdge.toFixed(1)}¢)</div>
-                        <div>Momentum 60s: ${mom60}</div>
-                        <div>Breakeven Win Rate: ${breakevenWR}</div>
-                        <div>Signal Agreement: ${agreement}</div>
-                        <div>Token Price: $${(trade.token_price || 0).toFixed(3)}</div>
-                        <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
-                            <div>Market: ${slug || 'N/A'}</div>
-                            <div>Window: ${trade.window_ts ? new Date(trade.window_ts * 1000).toLocaleString() : 'N/A'}</div>
-                            <div>Order ID: ${trade.order_id || 'N/A'}</div>
-                            ${trade.price_to_beat ? `<div>Strike Price: $${parseFloat(trade.price_to_beat).toLocaleString()}</div>` : ''}
-                            ${trade.resolve_price ? `<div>Resolve Price: $${parseFloat(trade.resolve_price).toLocaleString()}</div>` : ''}
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        }
+async function clearLogs() {
+  if (!confirm('Clear all logs?')) return;
+  try { await fetch(API+'/clear-logs',{method:'POST'}); toast('Cleared','success'); fetchLogs(); } catch(e){toast(e.message,'error');}
+}
 
-        async function fetchLogs() {
-            try {
-                const resp = await fetch(VPS_URL + '/logs');
-                if (!resp.ok) return;
-                const data = await resp.json();
-                const logs = data.logs || [];
-                document.getElementById('fullLogs').innerHTML = [...logs].reverse().map(formatLog).join('');
-            } catch (e) { }
-        }
+// TRADES
+async function fetchTrades() {
+  try {
+    const r = await fetch(API+'/stats?period='+filter);
+    const d = r.ok ? await r.json() : {};
+    const trades = (d.history||[]).reverse();
+    q('tradeList').innerHTML = trades.length
+      ? trades.map(t => {
+        const dir = t.direction||'SKIP'; const w=t.outcome==='win',l=t.outcome==='loss';
+        const pnl = t.pnl;
+        return `<div class="trade-entry">
+          <div class="trade-top">
+            <span class="trade-dir ${dir==='UP'?'u':'d'}">${dir==='UP'?'\u25B2':' \u25BC'} ${dir}</span>
+            <span>$${(t.bet_size||0).toFixed(2)} <span class="trade-pnl ${pnl>=0?'g':pnl<0?'r':''}">${pnl!==undefined&&pnl!==null?(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2):w?'WIN':l?'LOSS':'--'}</span></span>
+          </div>
+          <div class="trade-detail">
+            <span>${t.btc_price?'$'+parseFloat(t.btc_price).toLocaleString():'--'}</span>
+            <span>${t.timestamp?new Date(t.timestamp).toLocaleString():''}</span>
+            <span>${t.confidence?t.confidence.toFixed(1)+'%':''}</span>
+          </div>
+        </div>`;
+      }).join('')
+      : '<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px;font-family:JetBrains Mono,monospace">No trades yet</div>';
+  } catch(e){console.error(e);}
+}
 
-        function formatLog(log) {
-            const parts = log.split(' ');
-            const time = parts[1] ? parts[1].split(',')[0] : '';
-            const rest = parts.slice(2).join(' ');
-            let msgClass = 'log-msg info';
-            if (rest.includes('WARNING') || rest.includes('&#9888;')) msgClass = 'log-msg warn';
-            if (rest.includes('ERROR') || rest.includes('&#10060;')) msgClass = 'log-msg error';
-            if (rest.includes('&#9989;') || rest.includes('Found') || rest.includes('SUCCESS')) msgClass = 'log-msg success';
-            return `<div class="log-entry"><span class="log-time">${time}</span><span class="${msgClass}">${rest || log}</span></div>`;
-        }
+function setFilter(p) {
+  filter = p;
+  document.querySelectorAll('#tab-trades .btn').forEach(b => b.classList.remove('a'));
+  if (p==='1h') document.querySelector('#tab-trades .btn:first-child').classList.add('a');
+  else if (p==='24h') document.querySelector('#tab-trades .btn:nth-child(2)').classList.add('a');
+  else q('filterAll').classList.add('a');
+  fetchTrades();
+}
 
-        function saveConnectionSettings() {
-            VPS_URL = document.getElementById('vpsUrl').value.trim();
-            localStorage.setItem('vpsUrl', VPS_URL);
-            const interval = parseInt(document.getElementById('refreshInterval').value);
-            setupAutoRefresh(interval);
-            fetchAll();
-            showToast('Connection saved', 'success');
-        }
+async function exportTrades(fmt) {
+  try {
+    const r = await fetch(API+'/export-trades?format='+fmt);
+    const blob = await r.blob();
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='polybot_trades.'+fmt;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch(e){toast(e.message,'error');}
+}
 
-        async function saveStrategySettings() {
-            const cfg = {
-                dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
-                strategy: 'directional',
-                bet_size: parseFloat(document.getElementById('betSize').value) || 2,
-                spread_bps: 50,
-                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 8,
-                min_confidence: parseInt(document.getElementById('minConfidence').value) || 65,
-                strategy_version: '5.1'
-            };
-            try {
-                await fetch(VPS_URL + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
-                showToast('Strategy saved', 'success');
-                fetchAll();
-            } catch (e) { showToast(e.message, 'error'); }
-        }
+// LOGS
+async function fetchLogs() {
+  try {
+    const r = await fetch(API+'/logs');
+    if (!r.ok) return;
+    const d = await r.json();
+    const logs = d.logs||[];
+    q('logBox').innerHTML = [...logs].reverse().map(l => {
+      const p = l.split(' '); const t = p[1]?p[1].split(',')[0]:''; const rest = p.slice(2).join(' ');
+      let c = 'info'; if (/WARN/.test(rest)) c='warn'; if (/ERROR|Fail/.test(rest)) c='err'; if (/SUCCESS|Win|Found/.test(rest)) c='ok';
+      return `<div class="log-line"><span class="t">${t}</span><span class="m ${c}">${rest||l}</span></div>`;
+    }).join('');
+    q('logCount').textContent = logs.length+' lines';
+  } catch(e){}
+}
 
-        async function saveRiskSettings() {
-            const cfg = {
-                dry_run: document.getElementById('toggleDryRun').classList.contains('on'),
-                strategy: 'directional',
-                bet_size: parseFloat(document.getElementById('betSize').value) || 2,
-                spread_bps: 50,
-                max_trades_per_hour: parseInt(document.getElementById('maxTrades').value) || 8,
-                min_confidence: parseInt(document.getElementById('minConfidence').value) || 65,
-                strategy_version: '5.1',
-                risk_management: {
-                    enabled: true,
-                    daily_loss_limit_usdc: parseFloat(document.getElementById('dailyLossLimit').value) || 10,
-                    max_consecutive_losses: parseInt(document.getElementById('maxConsecutiveLosses').value) || 4,
-                    max_drawdown_pct: parseFloat(document.getElementById('maxDrawdown').value) || 25,
-                    max_token_price: parseFloat(document.getElementById('maxTokenPrice').value) || 0.75,
-                    initial_bankroll: parseFloat(document.getElementById('initialBankroll').value) || 100,
-                    cooldown_after_loss_seconds: 300,
-                    use_kelly_sizing: false,
-                    kelly_fraction: 0.25,
-                    auto_stop_win_rate_lookback_trades: 20,
-                    auto_stop_win_rate_threshold: 45,
-                    min_time_remaining_to_enter: 120,
-                    max_time_remaining_to_enter: 250,
-                    slippage_bps: 100
-                }
-            };
-            try {
-                await fetch(VPS_URL + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
-                showToast('Risk settings saved', 'success');
-                fetchAll();
-            } catch (e) { showToast(e.message, 'error'); }
-        }
+let logPoll = false;
+function startLogPoll() { if(logPoll)return; logPoll=true; fetchLogs(); logTimer=setInterval(fetchLogs,3000); }
+function stopLogPoll() { logPoll=false; if(logTimer){clearInterval(logTimer);logTimer=null;} }
 
-        async function resetCircuitBreaker() {
-            if (!confirm('Reset the risk circuit breaker?\n\nOnly do this if you understand why it tripped.')) return;
-            try {
-                await fetch(VPS_URL + '/reset-risk', { method: 'POST' });
-                showToast('Circuit breaker reset', 'success');
-                fetchAll();
-            } catch (e) { showToast(e.message, 'error'); }
-        }
+function setOffline(err) {
+  q('statusDot').className='dot r'; q('statusText').textContent='OFFLINE';
+  q('statusText').style.color='var(--red)';
+  q('engineState').textContent='OFFLINE'; q('engineState').style.color='var(--red)';
+}
 
-        function toggleDryRun() {
-            const toggle = document.getElementById('toggleDryRun');
-            const isOn = toggle.classList.contains('on');
-            if (!isOn) { if (!confirm('&#9888;&#65039; ENABLE LIVE TRADING?\n\nThis will place REAL trades with REAL money.\n\nAre you sure?')) return; }
-            toggle.classList.toggle('on');
-            document.getElementById('liveWarning').style.display = toggle.classList.contains('on') ? 'none' : 'block';
-        }
+function loadConfig() {
+  fetch(API+'/config').then(r=>r.json()).then(c=>{
+    if(!c)return;
+    q('sBetSize').value=c.bet_size||1; q('sMaxTrades').value=c.max_trades_per_hour||8; q('sMinConf').value=c.min_confidence||50;
+    q('sDailyLoss').value=(c.risk_management||{}).daily_loss_limit_usdc||10;
+  }).catch(()=>{});
+}
 
-        async function clearLogs() {
-            if (!confirm('Clear all bot logs?')) return;
-            try { await fetch(VPS_URL + '/clear-logs', { method: 'POST' }); showToast('Logs cleared', 'success'); fetchLogs(); } catch (e) { showToast(e.message, 'error'); }
-        }
+fetchAll(); timer = setInterval(fetchAll, refreshInt);
+loadConfig();
+</script>
 
-        async function clearTrades() {
-            if (!confirm('Clear all trade history?')) return;
-            try { await fetch(VPS_URL + '/clear-trades', { method: 'POST' }); showToast('Trades cleared', 'success'); fetchTrades(); } catch (e) { showToast(e.message, 'error'); }
-        }
-
-        async function exportTrades(format) {
-            try {
-                const resp = await fetch(VPS_URL + '/export-trades?format=' + format);
-                if (!resp.ok) throw new Error('Export failed');
-                const blob = await resp.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'polybot_trades.' + format;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                showToast('Downloaded polybot_trades.' + format, 'success');
-            } catch (e) { showToast(e.message, 'error'); }
-        }
-
-        function setOffline(error) {
-            const badge = document.getElementById('statusBadge');
-            badge.classList.add('offline'); document.getElementById('statusDot').classList.add('off');
-            document.getElementById('statusText').textContent = 'OFFLINE'; document.getElementById('statusText').style.color = 'var(--red)';
-            document.getElementById('lastUpdate').textContent = 'Error: ' + error;
-        }
-
-        function setupAutoRefresh(interval) {
-            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-            if (interval > 0) autoRefreshTimer = setInterval(fetchAll, interval);
-        }
-
-        fetchAll();
-        setupAutoRefresh(30000);
-        fetchBtcPrice();
-        setInterval(fetchBtcPrice, 15000);
-        (async function loadConfig() {
-            try {
-                const resp = await fetch(VPS_URL + '/config');
-                const cfg = await resp.json();
-                if (cfg) {
-                    document.getElementById('betSize').value = cfg.bet_size || 2;
-                    document.getElementById('maxTrades').value = cfg.max_trades_per_hour || 8;
-                    document.getElementById('minConfidence').value = cfg.min_confidence || 65;
-                    const rc = cfg.risk_management || {};
-                    document.getElementById('dailyLossLimit').value = rc.daily_loss_limit_usdc || 10;
-                    document.getElementById('maxConsecutiveLosses').value = rc.max_consecutive_losses || 4;
-                    document.getElementById('maxDrawdown').value = rc.max_drawdown_pct || 25;
-                    document.getElementById('maxTokenPrice').value = rc.max_token_price || 0.75;
-                    document.getElementById('initialBankroll').value = rc.initial_bankroll || 100;
-                }
-            } catch (e) { }
-        })();
-    </script>
+<style>
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%)translateY(-20px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;z-index:999;opacity:0;transition:all .3s;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translateX(-50%)translateY(0)}
+.toast.success{border-color:rgba(0,229,160,.3);color:var(--green)}
+.toast.error{border-color:rgba(255,71,87,.3);color:var(--red)}
+</style>
 </body>
 </html>

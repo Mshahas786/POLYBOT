@@ -1,8 +1,8 @@
 import os
 import json
 from dotenv import load_dotenv
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import ApiCreds
+from py_clob_client_v2.client import ClobClient
+from py_clob_client_v2.clob_types import ApiCreds
 
 def main():
     print("--- Polymarket Bot Activation Tool ---\n")
@@ -11,25 +11,30 @@ def main():
     load_dotenv()
     pk = os.getenv('POLY_PRIVATE_KEY')
     addr = os.getenv('POLY_WALLET_ADDRESS')
+    deposit_addr = os.getenv('POLY_DEPOSIT_WALLET_ADDRESS') or addr
+    sig_type = int(os.getenv('POLY_SIGNATURE_TYPE', '3'))
     
     if not pk:
         print("❌ ERROR: POLY_PRIVATE_KEY not found in .env!")
         return
 
     print(f"✅ Found Private Key for Wallet: {addr}")
+    print(f"🔑 Using Deposit Wallet: {deposit_addr}")
+    print(f"🔢 Signature Type: {sig_type}")
     
     try:
         # 2. Initialize Client
-        client = ClobClient('https://clob.polymarket.com', key=pk, chain_id=137, funder=addr)
+        client = ClobClient(host='https://clob.polymarket.com', chain_id=137, key=pk,
+                            signature_type=sig_type, funder=deposit_addr)
         
         # 3. Generate Keys
         print("🔄 Activating Trading Keys (Generating/Deriving)...")
-        # Use derived address to be 100% sure
         derived_addr = client.get_address()
-        creds = client.create_or_derive_api_creds()
+        creds = client.create_or_derive_api_key()
         
         # 4. RE-INITIALIZE with full credentials
-        client = ClobClient('https://clob.polymarket.com', key=pk, chain_id=137, creds=creds, funder=derived_addr)
+        client = ClobClient(host='https://clob.polymarket.com', chain_id=137, key=pk,
+                            creds=creds, signature_type=sig_type, funder=deposit_addr)
         
         print("\n" + "="*30)
         print("🔑 SUCCESS! COPY THESE INTO YOUR .env FILE:")
@@ -41,7 +46,7 @@ def main():
         
         # 5. Authorize USDC
         print("\n🔄 Authorizing USDC for trading...")
-        from py_clob_client.clob_types import BalanceAllowanceParams, AssetType
+        from py_clob_client_v2.clob_types import BalanceAllowanceParams, AssetType
         try:
             # Check balance first for better UX
             print(f"🔍 Checking USDC balance for {addr}...")
@@ -69,7 +74,7 @@ def main():
             else:
                 print(f"❌ Authorization Error: {e}")
                 
-        print("\n🚀 Ready! To start the bot, run: .\\start_local.ps1")
+        print("\nReady! To start the bot, run: ./start_mac.sh")
 
     except Exception as e:
         print(f"❌ CRITICAL ERROR: {e}")
