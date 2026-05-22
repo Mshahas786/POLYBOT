@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import os
+import ssl
 import time
 import threading
 import requests
@@ -120,7 +121,9 @@ class BinanceWS:
             on_close=self.on_close,
             on_open=self.on_open
         )
-        self.ws.run_forever(ping_interval=30, ping_timeout=10)
+        # SSL context for macOS compatibility
+        sslopt = {"cert_reqs": ssl.CERT_NONE}
+        self.ws.run_forever(ping_interval=30, ping_timeout=10, sslopt=sslopt)
 
     def start(self):
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -787,6 +790,14 @@ def bot_loop():
             time.sleep(3)
 
 # ── API Routes ─────────────────────────────────────────────────────────────────
+@app.route("/")
+def index():
+    """Serve the dashboard."""
+    dashboard_path = BOT_DIR / "dashboard.html"
+    if dashboard_path.exists():
+        return dashboard_path.read_text(encoding="utf-8")
+    return jsonify({"message": "PolyBot API", "endpoints": ["/status", "/health", "/stats", "/logs"]})
+
 @app.route("/status")
 def get_status():
     trades = safe_read_json(TRADES_PATH) or []

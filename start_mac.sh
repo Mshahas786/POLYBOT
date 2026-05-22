@@ -15,13 +15,17 @@ mkdir -p "$DATA_DIR"
 
 # Copy config and .env to vps folder if not already there
 if [ ! -f "$BOT_DIR/config.json" ]; then
-    cp "$SCRIPT_DIR/config.json" "$BOT_DIR/config.json"
-    echo "✅ Copied config.json to vps/"
+    if [ -f "$SCRIPT_DIR/config.json" ]; then
+        cp "$SCRIPT_DIR/config.json" "$BOT_DIR/config.json"
+        echo "✅ Copied config.json to vps/"
+    fi
 fi
 
 if [ ! -f "$BOT_DIR/.env" ]; then
-    cp "$SCRIPT_DIR/.env" "$BOT_DIR/.env"
-    echo "✅ Copied .env to vps/"
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        cp "$SCRIPT_DIR/.env" "$BOT_DIR/.env"
+        echo "✅ Copied .env to vps/"
+    fi
 fi
 
 # Check for .env
@@ -56,15 +60,19 @@ set +a
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
 echo "║          POLYBOT - BTC Trading Bot              ║"
-echo "║          Multi-Strategy Engine v9               ║"
+echo "║          Multi-Strategy Engine v5.1              ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 echo "📊 Market: BTC/5min"
-echo "💰 Trade Size: $1.00"
-echo "🎯 Strategy: 8-signal multi-strategy"
+echo "💰 Trade Size: \$1.00"
+echo "🎯 Strategy: Odds-Edge + Risk Managed"
 echo "📈 Dashboard: http://localhost:3000"
+TRADING_MODE=$(python3 -c "import json; cfg=json.load(open('$BOT_DIR/config.json')); print('DRY RUN (Simulation)' if cfg.get('dry_run') else 'LIVE TRADING')" 2>/dev/null || echo "DRY RUN")
+echo "🔒 Mode: $TRADING_MODE"
 echo ""
 echo "Starting bot..."
+echo ""
+echo "Press Ctrl+C to stop the bot"
 echo ""
 
 # Run the API server
