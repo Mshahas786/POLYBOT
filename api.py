@@ -1505,7 +1505,10 @@ def serve_assets(filename):
     assets_dir = BOT_DIR / "dashboard" / "dist" / "assets"
     file_path = assets_dir / filename
     if file_path.exists():
-        return file_path.read_bytes()
+        mime = {"js": "application/javascript", "css": "text/css", "map": "application/json"}.get(
+            filename.rsplit(".", 1)[-1], "application/octet-stream"
+        )
+        return Response(file_path.read_bytes(), mimetype=mime)
     return jsonify({"error": "not found"}), 404
 
 @app.route("/status")
