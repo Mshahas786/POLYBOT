@@ -222,11 +222,6 @@ class RiskManager:
                 remain = int(self.cooldown_after_loss - elapsed)
                 return False, f"COOLDOWN: {remain}s after loss"
 
-        # Max concurrent positions
-        pos_count = self.state.get("position_count", 0)
-        if pos_count >= self.max_concurrent_positions:
-            return False, f"MAX_POSITIONS: {pos_count} concurrent (limit {self.max_concurrent_positions})"
-
         # Token price guard
         if token_price > self.max_token_price:
             return False, f"OVERPRICED: token ${token_price:.3f} > max ${self.max_token_price:.3f}"
@@ -306,6 +301,20 @@ class RiskManager:
         self.state["circuit_breaker_reason"] = None
         self.state["circuit_breaker_time"] = None
         self.state["hourly_loss_triggered_time"] = None
+        self.hourly_loss_triggered_time = None
+        self.block_reason = None
+        self._save_state()
+
+    def reset_all_blocks(self):
+        self.state["circuit_breaker_tripped"] = False
+        self.state["circuit_breaker_reason"] = None
+        self.state["circuit_breaker_time"] = None
+        self.state["consecutive_losses"] = 0
+        self.state["win_rate_reduced"] = False
+        self.state["position_count"] = 0
+        self.state["hourly_loss_triggered_time"] = None
+        self.state["hourly_pnl"] = 0.0
+        self.last_loss_time = None
         self.hourly_loss_triggered_time = None
         self.block_reason = None
         self._save_state()

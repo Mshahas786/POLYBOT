@@ -243,6 +243,21 @@ def get_bucket_win_rate(bucket):
         return row[0], row[1]
     return 0.5, 0
 
+def get_bayesian_confidence_modifier(signal_type, direction, phase):
+    bucket = f"phase{phase}_{direction}_{signal_type}"
+    wr, total = get_bucket_win_rate(bucket)
+    if total < 3:
+        return 0
+    if wr > 0.58:
+        return 5
+    elif wr < 0.42:
+        return -10
+    elif wr > 0.55:
+        return 3
+    elif wr < 0.45:
+        return -5
+    return 0
+
 # ── Binance WebSocket (trade + depth20 combined) ──────────
 class BinanceWS:
     def __init__(self):
@@ -559,6 +574,33 @@ def get_window_phase(time_remaining):
         return 4
     return 0
 
+def calc_volatility():
+    with price_lock:
+        buf = list(price_buffer)
+        current = last_btc_price
+    if len(buf) < 10 or current == 0:
+        return 0
+    now = time.time()
+    recent = [(t, p) for t, p in buf if t >= now - 60]
+    if len(recent) < 5:
+        return 0
+    prices = [p for _, p in recent]
+    spread_pct = (max(prices) - min(prices)) / current * 100
+    return spread_pct
+
+def calc_trend_bias():
+    with price_lock:
+        buf = list(price_buffer)
+        current = last_btc_price
+    if len(buf) < 30 or current == 0:
+        return 0
+    now = time.time()
+    recent_120 = [(t, p) for t, p in buf if t >= now - 120]
+    if len(recent_120) < 10:
+        return 0
+    avg_120 = sum(p for _, p in recent_120) / len(recent_120)
+    return (current - avg_120) / avg_120 * 100
+
 def calc_momentum_and_accel():
     with price_lock:
         buf = list(price_buffer)
@@ -841,13 +883,31 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
             confidence = 70
             signal_type = "MOMENTUM_ONLY"
 
+    # Priority 7: Mean Reversion (fade overextended moves)
+    if priority < 6 and phase >= 2 and abs(delta_price) > 80 and time_remaining > 45:
+        reversion_dir = "DOWN" if delta_price > 80 else "UP"
+        reversion_conf = min(75, 55 + abs(delta_price) * 0.15)
+        if mom_strength == "weakening" or abs(acceleration) > 30:
+            reversion_conf += 5
+        if wall_dir == reversion_dir:
+            reversion_conf += 5
+        if phase >= 3:
+            reversion_conf += 5
+        priority = 7
+        decision = reversion_dir
+        confidence = min(85, int(reversion_conf))
+        signal_type = "MEAN_REVERSION"
+
     if decision:
+        bayes_mod = get_bayesian_confidence_modifier(signal_type, decision, phase)
+        confidence = max(50, min(99, confidence + bayes_mod))
         return decision, confidence, {
             "phase": phase, "wall_ratio": round(wall_ratio, 2),
             "lag_score": round(lag_score, 2), "delta_price": round(delta_price, 2),
             "acceleration": round(acceleration, 2), "signal_type": signal_type,
             "priority": priority, "mom_dir": mom_dir, "wall_dir": wall_dir,
             "bin_dir": bin_dir, "mom_strength": mom_strength,
+            "bayes_mod": bayes_mod,
         }, signal_type, priority
 
     return None, 0, {
@@ -1224,6 +1284,8 @@ def bot_loop():
                         log_to_file(f"RISK_BLOCK: {risk_reason}")
                         direction = None
 
+                vol_pct = calc_volatility()
+                trend_pct = calc_trend_bias()
                 with strategy_lock:
                     current_strategy_info.update({
                         "slug": slug, "price_to_beat": price_to_beat,
@@ -1239,8 +1301,9 @@ def bot_loop():
                         "wall_ratio": round(wall_ratio, 2),
                         "lag_score": round(lag_score, 2),
                         "prioritized_signal": signal_type,
+                        "volatility_pct": round(vol_pct, 2),
+                        "trend_pct": round(trend_pct, 3),
                     })
-
                 if int(now) % 60 < SIGNAL_CHECK_INTERVAL or signal_type != "NONE":
                     log_to_file(
                         f"BTC: ${price_now:.2f} | CL: ${chainlink_px:.2f} | "
@@ -1248,6 +1311,7 @@ def bot_loop():
                         f"Up: {up_price:.3f} Down: {down_price:.3f} | "
                         f"Phase: {phase} | {time_remaining}s | "
                         f"Wall: {wall_ratio:.2f} | Lag: {lag_score:.2f}% | "
+                        f"Vol: {vol_pct:.2f}% | Trend: {trend_pct:+.3f}% | "
                         f"Signal: {signal_type} | Dir: {direction or 'NONE'} | "
                         f"Conf: {confidence:.1f}% | Risk: {risk_status} | "
                         f"Stale: {stale_sec:.0f}s"
@@ -1283,10 +1347,43 @@ def bot_loop():
                         log_to_file(f"MOMENTUM BLOCK: DOWN skipped (delta_price={delta_price:.1f} > 50)")
                         direction = None
 
+                # ── Volatility guard ─────────────────────
+                if direction:
+                    vol_pct = calc_volatility()
+                    if vol_pct > 0.5:
+                        log_to_file(f"VOLATILITY BLOCK: {direction} skipped (spread={vol_pct:.2f}% > 0.5%)")
+                        direction = None
+
+                # ── Trend bias filter ────────────────────
+                if direction:
+                    trend_pct = calc_trend_bias()
+                    if direction == "UP" and trend_pct < -0.15:
+                        log_to_file(f"TREND BLOCK: UP skipped (trend={trend_pct:.3f}% bearish)")
+                        direction = None
+                    elif direction == "DOWN" and trend_pct > 0.15:
+                        log_to_file(f"TREND BLOCK: DOWN skipped (trend={trend_pct:.3f}% bullish)")
+                        direction = None
+
+                # ── Resolution Hunting (last 30s, extreme token prices) ──
+                if not direction and not already_traded and time_remaining <= 30:
+                    res_hunt_dir = None
+                    if up_price <= 0.08:
+                        res_hunt_dir = "UP"
+                    elif down_price <= 0.08:
+                        res_hunt_dir = "DOWN"
+                    if res_hunt_dir:
+                        direction = res_hunt_dir
+                        confidence = 90
+                        signal_type = "RESOLUTION_HUNT"
+                        signals = {"signal_type": signal_type, "priority": 0, "phase": phase,
+                                   "wall_ratio": round(wall_ratio, 2), "lag_score": round(lag_score, 2),
+                                   "delta_price": round(delta_price, 2), "acceleration": round(acceleration, 2)}
+                        log_to_file(f"RESOLUTION HUNT: {direction} at token ${up_price if direction=='UP' else down_price:.3f}", "INFO")
+
                 # ── Execute Trade ────────────────────────
                 if direction and risk_status == "OK" and not already_traded:
                     min_conf = float(cfg.get("min_confidence", 70))
-                    if confidence < min_conf and signal_type != "ARB":
+                    if confidence < min_conf and signal_type != "ARB" and signal_type != "RESOLUTION_HUNT":
                         direction = None
                         with strategy_lock:
                             current_strategy_info["status"] = f"Low conf ({confidence:.0f}% < {min_conf:.0f}%)"
@@ -1328,7 +1425,7 @@ def bot_loop():
                         target_token_id = up_token_id if direction == "UP" else down_token_id
                         target_price = up_price if direction == "UP" else down_price
 
-                        if 0.47 < target_price < 0.53:
+                        if 0.48 < target_price < 0.52:
                             log_to_file(f"EDGE BLOCK: {direction} at ${target_price:.3f} too close to 0.50")
                             with strategy_lock:
                                 current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
@@ -1617,10 +1714,24 @@ def restart_bot():
 @require_api_key
 def reset_risk():
     if risk_manager:
-        risk_manager.reset_circuit_breaker()
-        log_to_file("Risk circuit breaker manually reset via API")
-        return jsonify({"status": "reset"})
+        risk_manager.reset_all_blocks()
+        log_to_file("Risk state fully reset via API (consecutive losses, win_rate_reduced, position_count)")
+        return jsonify({"status": "reset", "message": "All risk blocks cleared"})
     return jsonify({"status": "no_risk_manager"}), 503
+
+@app.route("/hard-reset", methods=["POST"])
+@require_api_key
+def hard_reset():
+    if risk_manager:
+        risk_manager.reset_all_blocks()
+        if risk_manager.state_path.exists():
+            risk_manager.state_path.unlink()
+        risk_manager._load_state()
+    trades_path = BOT_DIR / "trades.json"
+    if trades_path.exists():
+        safe_write_json(trades_path, [])
+    log_to_file("HARD RESET: risk state + trades cleared via dashboard", "WARN")
+    return jsonify({"status": "ok", "message": "Risk state and trades reset"})
 
 @app.route("/config", methods=["GET", "POST"])
 @require_api_key
