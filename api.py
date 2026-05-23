@@ -746,10 +746,12 @@ def check_outcomes(baselines):
             bet = float(t.get("bet_size", 2.0))
             token_price = float(t.get("token_price", 0.5))
             if win:
-                pnl = round((1.0 - token_price) * bet, 2)
+                pnl = round(bet * (1.0 / token_price - 1.0), 2)
             else:
-                pnl = round(-token_price * bet, 2)
+                pnl = round(-bet, 2)
             t["pnl"] = pnl
+            t["bet_usdc"] = bet
+            t["contracts"] = round(bet / token_price, 4)
             updated = True
             log_to_file(
                 f"{'WIN' if win else 'LOSS'}: {direction} | "

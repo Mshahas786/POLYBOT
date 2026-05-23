@@ -134,7 +134,7 @@ class RiskManager:
     def record_outcome(self, win: bool, bet_size: float, token_price: float):
         self._maybe_roll_day()
         self._maybe_reset_hourly()
-        profit = (1.0 - token_price) * bet_size if win else -token_price * bet_size
+        profit = bet_size * (1.0 / token_price - 1.0) if win else -bet_size
         self.state["daily_pnl"] += profit
         self.state["hourly_pnl"] = self.state.get("hourly_pnl", 0.0) + profit
         self.state["current_bankroll"] += profit
