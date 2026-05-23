@@ -943,7 +943,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                                                confidence, is_high_conf, is_arb)
     else:
         final_bet = base_bet
-    final_bet = max(final_bet, 1.0)  # Polymarket min order size
+    final_bet = max(min(final_bet, base_bet), 1.0)  # Cap at configured bet_size, min 1.0
 
     if not is_dry and client:
         try:
@@ -1195,7 +1195,10 @@ def bot_loop():
 
             with trades_lock:
                 trades = safe_read_json(TRADES_PATH) or []
-            already_traded = any(t.get("window_ts") == window_ts for t in trades)
+            already_traded = any(
+                t.get("window_ts") == window_ts and t.get("market_slug") == slug
+                for t in trades
+            )
             diff_pct = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
             delta_price, acceleration, _ = calc_momentum_and_accel()
             wall_ratio, bid_wall, ask_wall = calc_wall_ratio()
@@ -1401,15 +1404,15 @@ def bot_loop():
                                        else (tokens_list[0].get("tokenId") if tokens_list else None))
                         down_token_id = (clob_ids[1] if len(clob_ids) > 1
                                          else (tokens_list[1].get("tokenId") if len(tokens_list) > 1 else None))
-                        log_to_file(f"ARB: Buying both sides @ up=${up_ask:.4f} down=${down_ask:.4f}", "INFO")
-                        if up_token_id:
+                        # Pick the cheaper side (single directional bet, not both)
+                        arb_side = "DOWN" if up_price >= down_price else "UP"
+                        arb_token_id = down_token_id if up_price >= down_price else up_token_id
+                        arb_price = down_price if up_price >= down_price else up_price
+                        log_to_file(f"ARB: Single bet on {arb_side} @ ${arb_price:.4f} (cheaper side)", "INFO")
+                        if arb_token_id:
+                            direction = arb_side
                             execute_trade(
-                                "UP", up_token_id, up_ask, price_now,
-                                slug, window_ts, 100, signals, cfg, client, market, price_to_beat
-                            )
-                        if down_token_id:
-                            execute_trade(
-                                "DOWN", down_token_id, down_ask, price_now,
+                                arb_side, arb_token_id, arb_price, price_now,
                                 slug, window_ts, 100, signals, cfg, client, market, price_to_beat
                             )
                     else:
