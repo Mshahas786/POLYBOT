@@ -1438,7 +1438,10 @@ def bot_loop():
                         recent_trades = [t for t in trades if t.get("timestamp", "") > one_hour]
                         max_hour = cfg.get("max_trades_per_hour", 12)
 
-                        if len(recent_trades) >= max_hour:
+                        if not direction:
+                            with strategy_lock:
+                                current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
+                        elif len(recent_trades) >= max_hour:
                             with strategy_lock:
                                 current_strategy_info["status"] = f"Hourly limit ({len(recent_trades)}/{max_hour})"
                         elif not target_token_id:
