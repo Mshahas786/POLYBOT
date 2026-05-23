@@ -1328,6 +1328,15 @@ def bot_loop():
                         target_token_id = up_token_id if direction == "UP" else down_token_id
                         target_price = up_price if direction == "UP" else down_price
 
+                        if 0.47 < target_price < 0.53:
+                            log_to_file(f"EDGE BLOCK: {direction} at ${target_price:.3f} too close to 0.50")
+                            with strategy_lock:
+                                current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
+                            direction = None
+                        else:
+                            edge_pct = abs(target_price - 0.50) * 100
+                            log_to_file(f"EDGE: {direction} at ${target_price:.3f} ({edge_pct:.0f}% skew)", "INFO")
+
                         one_hour = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
                         recent_trades = [t for t in trades if t.get("timestamp", "") > one_hour]
                         max_hour = cfg.get("max_trades_per_hour", 12)
