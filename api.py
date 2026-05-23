@@ -1491,10 +1491,22 @@ def bot_loop():
 # ── API Routes (v6.0) ─────────────────────────────────
 @app.route("/")
 def index():
+    # Try Vite-built dashboard first, then fallback to legacy index.html
+    vite_path = BOT_DIR / "dashboard" / "dist" / "index.html"
+    if vite_path.exists():
+        return vite_path.read_text(encoding="utf-8")
     dashboard_path = BOT_DIR / "index.html"
     if dashboard_path.exists():
         return dashboard_path.read_text(encoding="utf-8")
     return jsonify({"message": "PolyBot API v6.0", "endpoints": ["/status", "/health", "/stats", "/logs"]})
+
+@app.route("/assets/<path:filename>")
+def serve_assets(filename):
+    assets_dir = BOT_DIR / "dashboard" / "dist" / "assets"
+    file_path = assets_dir / filename
+    if file_path.exists():
+        return file_path.read_bytes()
+    return jsonify({"error": "not found"}), 404
 
 @app.route("/status")
 def get_status():

@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #08080f;
+  --color-surface: #11111e;
+  --color-surface2: #1a1a2e;
+  --color-border: #2a2a3e;
+  --color-accent: #f0b429;
+  --color-green: #00e5a0;
+  --color-red: #ff4757;
+  --color-blue: #4d9fff;
+  --color-purple: #a855f7;
+  --color-text: #e2e2f0;
+  --color-text2: #8888a0;
+  --color-muted: #555570;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100dvh;
+}
+
+@keyframes pulse-row {
+  0% { background: rgba(240, 180, 41, 0.2); }
+  100% { background: transparent; }
+}
+
+.new-trade {
+  animation: pulse-row 1.5s ease-out;
+}

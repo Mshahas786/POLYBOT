@@ -25,6 +25,12 @@ fi
 echo "Installing dependencies..."
 pip install -q -r "$SCRIPT_DIR/requirements.txt"
 
+echo "Building dashboard (Vite + Tailwind)..."
+cd "$SCRIPT_DIR/dashboard"
+npm install --silent 2>/dev/null
+npm run build --silent 2>/dev/null
+cd "$SCRIPT_DIR"
+
 ulimit -n 10240 2>/dev/null || true
 
 set -a
