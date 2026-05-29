@@ -339,7 +339,7 @@ export async function fetchLogs() {
       if (/ERROR|Fail|Error/.test(rest)) c = 'err'
       if (/WIN|SUCCESS/.test(rest)) c = 'ok'
       const colors = { info: 'text-text2', warn: 'text-accent', err: 'text-red', ok: 'text-green' }
-      return '<div class="flex gap-1.5 py-[3px] px-1.5 font-mono text-[9px] border-b border-border/15"><span class="text-muted flex-shrink-0">' + ts + '</span><span class="' + (colors[c] || 'text-text2') + '">' + (rest || l) + '</span></div>'
+      return '<div class="flex gap-1.5 py-[3px] px-1.5 font-mono text-xs sm:text-[13px] border-b border-border/15"><span class="text-muted flex-shrink-0">' + ts + '</span><span class="' + (colors[c] || 'text-text2') + '">' + (rest || l) + '</span></div>'
     }).join('')
     $('logCount').textContent = logs.length + ' lines'
   } catch (e) { /* silent */ }
