@@ -4,27 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PolyBot Dashboard</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#08080f;color:#e2e2f0;font-family:'Inter',sans-serif;min-height:100dvh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:20px}
-  .logo{display:flex;align-items:center;gap:10px}
-  .dot{width:12px;height:12px;border-radius:50%;background:#f0b429;box-shadow:0 0 12px rgba(240,180,41,0.6)}
-  h1{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:#f0b429;letter-spacing:2px}
-  .loader{width:32px;height:32px;border:3px solid #2a2a3e;border-top-color:#f0b429;border-radius:50%;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  p{font-family:'JetBrains Mono',monospace;font-size:12px;color:#8888a0}
-  a{color:#4d9fff;text-decoration:none}
-  a:hover{text-decoration:underline}
-</style>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={
+  theme:{
+    extend:{
+      colors:{
+        bg:'#08080f',surface:'#11111e',surface2:'#1a1a2e',
+        border:'#2a2a3e',accent:'#f0b429',green:'#00e5a0',
+        red:'#ff4757',blue:'#4d9fff',purple:'#a855f7',
+        text:'#e2e2f0',text2:'#8888a0',muted:'#555570'
+      },
+      fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}
+    }
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
-<body>
-  <div class="logo">
-    <span class="dot"></span>
-    <h1>POLYBOT</h1>
+<body class="bg-bg text-text min-h-dvh flex items-center justify-center flex-col gap-4 p-5">
+  <div class="flex items-center gap-2.5">
+    <span class="w-3 h-3 rounded-full bg-accent shadow-[0_0_12px_rgba(240,180,41,0.6)]"></span>
+    <h1 class="font-mono text-2xl font-bold text-accent tracking-widest">POLYBOT</h1>
   </div>
-  <div class="loader"></div>
-  <p>Loading dashboard...</p>
-  <p style="font-size:10px;color:#555570">Not redirected? <a href="dashboard/index.html">Open Dashboard</a></p>
+  <div class="w-8 h-8 border-3 border-border border-t-accent rounded-full animate-spin"></div>
+  <p class="font-mono text-xs text-text2">Loading dashboard...</p>
+  <p class="font-mono text-[10px] text-muted">Not redirected? <a href="dashboard/index.html" class="text-blue hover:underline">Open Dashboard</a></p>
   <script>setTimeout(function(){window.location.href='dashboard/index.html'},500)</script>
 </body>
 </html>

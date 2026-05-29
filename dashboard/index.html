@@ -522,19 +522,19 @@
             <div class="card-header text-[10px] md:text-xs">API Credentials</div>
             <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Polymarket wallet keys, API credentials, and RPC settings</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-              <div class="setting-row sm:col-span-2"><span title="Wallet private key (0x-prefixed)">Private Key</span><input id="env-POLY_PRIVATE_KEY" type="password" class="setting-input" style="width:280px" /></div>
-              <div class="setting-row sm:col-span-2"><span title="Polymarket wallet address">Wallet Address</span><input id="env-POLY_WALLET_ADDRESS" type="text" class="setting-input" style="width:280px" /></div>
-              <div class="setting-row"><span title="Relayer API key address">Relayer API Addr</span><input id="env-RELAYER_API_KEY_ADDRESS" type="text" class="setting-input" style="width:180px" /></div>
-              <div class="setting-row"><span title="Polymarket API key">API Key</span><input id="env-POLY_API_KEY" type="text" class="setting-input" style="width:180px" /></div>
-              <div class="setting-row"><span title="API secret (auto-generated if blank)">API Secret</span><input id="env-POLY_API_SECRET" type="password" class="setting-input" style="width:180px" /></div>
-              <div class="setting-row"><span title="API passphrase (auto-generated if blank)">API Passphrase</span><input id="env-POLY_API_PASSPHRASE" type="password" class="setting-input" style="width:180px" /></div>
-              <div class="setting-row"><span title="Polygon RPC endpoint">RPC URL</span><input id="env-POLYGON_RPC" type="text" class="setting-input" style="width:180px" /></div>
-              <div class="setting-row"><span title="1=EOA, 3=Poly1271">Sig Type</span><input id="env-POLY_SIGNATURE_TYPE" type="number" min="1" max="3" step="1" value="1" class="setting-input" style="width:60px" /></div>
-              <div class="setting-row"><span title="Deposit wallet (Poly1271 only)">Deposit Wallet</span><input id="env-POLY_DEPOSIT_WALLET_ADDRESS" type="text" class="setting-input" style="width:180px" placeholder="Optional" /></div>
-              <div class="setting-row"><span title="RTDS WebSocket URL">RTDS WS URL</span><input id="env-POLY_RTDS_WS_URL" type="text" class="setting-input" style="width:180px" placeholder="Optional" /></div>
-              <div class="setting-row"><span title="Dashboard API auth key">Dashboard API Key</span><input id="env-POLYBOT_API_KEY" type="password" class="setting-input" style="width:180px" placeholder="Optional" /></div>
+              <div class="setting-row sm:col-span-2"><span title="Wallet private key (0x-prefixed)">Private Key</span><input id="env-POLY_PRIVATE_KEY" type="password" class="setting-input w-[200px] sm:w-[280px]" /></div>
+              <div class="setting-row sm:col-span-2"><span title="Polymarket wallet address">Wallet Address</span><input id="env-POLY_WALLET_ADDRESS" type="text" class="setting-input w-[200px] sm:w-[280px]" /></div>
+              <div class="setting-row"><span title="Relayer API key address">Relayer API Addr</span><input id="env-RELAYER_API_KEY_ADDRESS" type="text" class="setting-input w-[130px] sm:w-[180px]" /></div>
+              <div class="setting-row"><span title="Polymarket API key">API Key</span><input id="env-POLY_API_KEY" type="text" class="setting-input w-[130px] sm:w-[180px]" /></div>
+              <div class="setting-row"><span title="API secret (auto-generated if blank)">API Secret</span><input id="env-POLY_API_SECRET" type="password" class="setting-input w-[130px] sm:w-[180px]" /></div>
+              <div class="setting-row"><span title="API passphrase (auto-generated if blank)">API Passphrase</span><input id="env-POLY_API_PASSPHRASE" type="password" class="setting-input w-[130px] sm:w-[180px]" /></div>
+              <div class="setting-row"><span title="Polygon RPC endpoint">RPC URL</span><input id="env-POLYGON_RPC" type="text" class="setting-input w-[130px] sm:w-[180px]" /></div>
+              <div class="setting-row"><span title="1=EOA, 3=Poly1271">Sig Type</span><input id="env-POLY_SIGNATURE_TYPE" type="number" min="1" max="3" step="1" value="1" class="setting-input w-[50px] sm:w-[60px]" /></div>
+              <div class="setting-row"><span title="Deposit wallet (Poly1271 only)">Deposit Wallet</span><input id="env-POLY_DEPOSIT_WALLET_ADDRESS" type="text" class="setting-input w-[130px] sm:w-[180px]" placeholder="Optional" /></div>
+              <div class="setting-row"><span title="RTDS WebSocket URL">RTDS WS URL</span><input id="env-POLY_RTDS_WS_URL" type="text" class="setting-input w-[130px] sm:w-[180px]" placeholder="Optional" /></div>
+              <div class="setting-row"><span title="Dashboard API auth key">Dashboard API Key</span><input id="env-POLYBOT_API_KEY" type="password" class="setting-input w-[130px] sm:w-[180px]" placeholder="Optional" /></div>
               <div class="setting-row"><span title="Logging verbosity">Log Level</span>
-                <select id="env-POLYBOT_LOG_LEVEL" class="setting-input" style="width:80px;text-align:left;-moz-appearance:auto">
+                <select id="env-POLYBOT_LOG_LEVEL" class="setting-input w-[70px] sm:w-[80px] text-left">
                   <option value="DEBUG">DEBUG</option>
                   <option value="INFO" selected>INFO</option>
                   <option value="WARN">WARN</option>
