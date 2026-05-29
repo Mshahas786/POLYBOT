@@ -29,6 +29,21 @@ CHAIN_ID = 137
 PRICE_BUFFER_SIZE = 300
 SIGNAL_CHECK_INTERVAL = 10
 
+# ── Config Cache (set at top of each bot_loop iteration) ──
+_cfg_cache = {"dry_run": True}
+
+def cfg(key, default=None):
+    return _cfg_cache.get(key, default)
+
+def strat(key, default=None):
+    return _cfg_cache.get("strategy", {}).get(key, default)
+
+def module_enabled(name):
+    return _cfg_cache.get("modules", {}).get(name, True)
+
+def guard_enabled(name):
+    return _cfg_cache.get("guards", {}).get(name, True)
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
@@ -71,6 +86,9 @@ price_lock = threading.Lock()
 strategy_lock = threading.Lock()
 trades_lock = threading.Lock()
 price_buffer = []
+candle_buffer = []
+current_candle = None
+candle_lock = threading.Lock()
 account_stats = {"balance": 0.0, "pnl": 0.0, "last_updated": 0}
 current_strategy_info = {
     "slug": "N/A", "price_to_beat": 0, "current_diff": 0,
@@ -80,7 +98,11 @@ current_strategy_info = {
     "phase": 0, "wall_ratio": 0, "lag_score": 0,
     "prioritized_signal": "None",
 }
-risk_manager = None  # type: Optional[RiskManager]
+risk_manager: 'RiskManager | None' = None
+last_signal_guard = {"direction": None, "timestamp": 0}
+window_best_signal = {}
+_traded_windows = set()
+_failed_window_attempts = {}
 
 log_lock = threading.Lock()
 LOG_LEVELS = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
@@ -246,16 +268,25 @@ def get_bucket_win_rate(bucket):
 def get_bayesian_confidence_modifier(signal_type, direction, phase):
     bucket = f"phase{phase}_{direction}_{signal_type}"
     wr, total = get_bucket_win_rate(bucket)
-    if total < 3:
+    min_trades = strat("bayesian_min_trades", 3)
+    if total < min_trades:
         return 0
-    if wr > 0.58:
-        return 5
-    elif wr < 0.42:
-        return -10
-    elif wr > 0.55:
-        return 3
-    elif wr < 0.45:
-        return -5
+    bh_wr = strat("bayesian_boost_high_wr", 0.58)
+    bh_amt = strat("bayesian_boost_high_amt", 5)
+    bl_wr = strat("bayesian_boost_low_wr", 0.55)
+    bl_amt = strat("bayesian_boost_low_amt", 3)
+    ph_wr = strat("bayesian_penalty_high_wr", 0.42)
+    ph_amt = strat("bayesian_penalty_high_amt", -10)
+    pl_wr = strat("bayesian_penalty_low_wr", 0.45)
+    pl_amt = strat("bayesian_penalty_low_amt", -5)
+    if wr > bh_wr:
+        return bh_amt
+    elif wr < ph_wr:
+        return ph_amt
+    elif wr > bl_wr:
+        return bl_amt
+    elif wr < pl_wr:
+        return pl_amt
     return 0
 
 # ── Binance WebSocket (trade + depth20 combined) ──────────
@@ -272,14 +303,19 @@ class BinanceWS:
         global last_btc_price, price_buffer
         data = json.loads(message)
         price = float(data['p'])
+        qty = float(data['q'])
+        is_sell = data.get('m', False)
         now = time.time()
         with price_lock:
             last_btc_price = price
             if now - self.last_buf >= 2:
                 price_buffer.append((now, price))
-                if len(price_buffer) > PRICE_BUFFER_SIZE:
-                    price_buffer = price_buffer[-PRICE_BUFFER_SIZE:]
+                max_buf = strat("max_price_buffer_size", PRICE_BUFFER_SIZE)
+                if len(price_buffer) > max_buf:
+                    price_buffer = price_buffer[-max_buf:]
                 self.last_buf = now
+        with candle_lock:
+            update_candle(price, qty, is_sell, now)
 
     def on_error(self, ws, error):
         log_to_file(f"Binance WS error: {error}", "WARN")
@@ -312,69 +348,31 @@ class BinanceWS:
 # ── Chainlink RTDS WebSocket (Module 1) ───────────────────────
 class ChainlinkWS:
     """
-    Connects to Polymarket RTDS for Chainlink BTC/USD feed.
-    The EXACT feed used for Polymarket settlement resolution.
+    Disabled: Polymarket RTDS WebSocket (rtds.polymarket.com) has been deprecated.
+    Chainlink price is now fetched exclusively via Web3 fallback from Polygon.
     """
     def __init__(self):
-        self.url = os.getenv("POLY_RTDS_WS_URL", "wss://rtds.polymarket.com/ws")
+        self.url = None
         self.ws = None
         self.thread = None
-        self._reconnect_delay = 5
-        self._max_reconnect_delay = 60
 
     def on_message(self, ws, message):
-        global chainlink_price, last_chainlink_update
-        try:
-            data = json.loads(message)
-            if data.get("topic") == "crypto_prices_chainlink":
-                prices = data.get("data", {})
-                btc_key = None
-                for k in prices:
-                    if "btc" in k.lower() or "BTC" in k:
-                        btc_key = k
-                        break
-                if btc_key:
-                    px = float(prices[btc_key])
-                    with price_lock:
-                        chainlink_price = px
-                        last_chainlink_update = time.time()
-        except Exception as e:
-            pass
+        pass
 
     def on_error(self, ws, error):
-        log_to_file(f"Chainlink WS error: {error}", "WARN")
+        pass
 
     def on_close(self, ws, code, msg):
-        log_to_file(f"Chainlink WS closed (code={code}). Reconnecting...", "WARN")
-        time.sleep(self._reconnect_delay)
-        self._reconnect_delay = min(self._reconnect_delay * 2, self._max_reconnect_delay)
-        self.run()
+        pass
 
     def on_open(self, ws):
-        log_to_file("Chainlink RTDS WS connected", "INFO")
-        self._reconnect_delay = 5
-        subscribe = json.dumps({
-            "type": "subscribe",
-            "topic": "crypto_prices_chainlink",
-            "symbols": ["btc/usd"]
-        })
-        ws.send(subscribe)
-        log_to_file("Subscribed to crypto_prices_chainlink btc/usd", "INFO")
+        pass
 
     def run(self):
-        self.ws = websocket.WebSocketApp(
-            self.url,
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close,
-            on_open=self.on_open
-        )
-        sslopt = {"cert_reqs": ssl.CERT_NONE}
-        self.ws.run_forever(ping_interval=30, ping_timeout=10, sslopt=sslopt)
+        pass
 
     def start(self):
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
+        log_to_file("Chainlink WS disabled (rtds.polymarket.com deprecated). Using Web3 fallback only.", "INFO")
 
 # ── Order Book WebSocket (Module 3) ──────────────────────────
 class OrderBookWS:
@@ -444,12 +442,18 @@ def calc_wall_ratio():
     if ask_wall == 0:
         return 3.0, bid_wall, 0
     ratio = bid_wall / ask_wall
+    # Cap ratio to prevent spoofed walls from dominating signals
+    r_max = strat("wall_ratio_max", 5.0)
+    r_min = strat("wall_ratio_min", 0.2)
+    ratio = min(ratio, r_max) if ratio > 1.0 else max(ratio, r_min)
     return ratio, bid_wall, ask_wall
 
 def wall_signal(ratio):
-    if ratio > 2.5:
+    up_thresh = strat("wall_ratio_up_threshold", 2.5)
+    down_thresh = strat("wall_ratio_down_threshold", 0.4)
+    if ratio > up_thresh:
         return "UP"
-    elif ratio < 0.4:
+    elif ratio < down_thresh:
         return "DOWN"
     return "NEUTRAL"
 
@@ -504,6 +508,12 @@ def get_price_to_beat(window_ts, condition_id=None):
             data = resp.json()
             if "price" in data:
                 return float(data["price"])
+    except:
+        pass
+    try:
+        stale_limit = strat("price_to_beat_stale_threshold", 120)
+        if chainlink_price > 0 and chainlink_stale_seconds() < stale_limit:
+            return chainlink_price
     except:
         pass
     try:
@@ -564,13 +574,17 @@ def fetch_account_stats(address):
 
 # ── Module 2: Entry Engine ────────────────────────────────────
 def get_window_phase(time_remaining):
-    if time_remaining > 250:
+    p1 = strat("phase1_min_seconds", 250)
+    p2 = strat("phase2_min_seconds", 100)
+    p3 = strat("phase3_min_seconds", 30)
+    p4 = strat("phase4_min_seconds", 5)
+    if time_remaining > p1:
         return 1
-    elif time_remaining > 100:
+    elif time_remaining > p2:
         return 2
-    elif time_remaining > 30:
+    elif time_remaining > p3:
         return 3
-    elif time_remaining > 5:
+    elif time_remaining > p4:
         return 4
     return 0
 
@@ -578,15 +592,119 @@ def calc_volatility():
     with price_lock:
         buf = list(price_buffer)
         current = last_btc_price
-    if len(buf) < 10 or current == 0:
+    min_samp = strat("volatility_min_samples", 10)
+    window = strat("volatility_window_seconds", 60)
+    if len(buf) < min_samp or current == 0:
         return 0
     now = time.time()
-    recent = [(t, p) for t, p in buf if t >= now - 60]
+    recent = [(t, p) for t, p in buf if t >= now - window]
     if len(recent) < 5:
         return 0
     prices = [p for _, p in recent]
     spread_pct = (max(prices) - min(prices)) / current * 100
     return spread_pct
+
+# ── Candle Builder (from Binance trade stream) ───────────
+def update_candle(price, qty, is_sell, ts):
+    global current_candle, candle_buffer
+    minute_start = int(ts // 60) * 60
+    if current_candle is None or current_candle["start_ts"] != minute_start:
+        if current_candle is not None:
+            candle_buffer.append(current_candle)
+            if len(candle_buffer) > 20:
+                candle_buffer = candle_buffer[-20:]
+        current_candle = {
+            "start_ts": minute_start,
+            "o": price, "h": price, "l": price, "c": price,
+            "v": qty, "buy_v": 0 if is_sell else qty, "sell_v": qty if is_sell else 0,
+        }
+    else:
+        c = current_candle
+        c["h"] = max(c["h"], price)
+        c["l"] = min(c["l"], price)
+        c["c"] = price
+        c["v"] += qty
+        if is_sell:
+            c["sell_v"] += qty
+        else:
+            c["buy_v"] += qty
+
+# ── Volatility Engine ──────────────────────────────────
+def calc_realized_vol():
+    with candle_lock:
+        candles = list(candle_buffer)
+    if len(candles) < 3:
+        return None
+    closes = [c["c"] for c in candles[-10:]]
+    log_rets = []
+    for i in range(1, len(closes)):
+        if closes[i-1] > 0 and closes[i] > 0:
+            log_rets.append(math.log(closes[i] / closes[i-1]))
+    if len(log_rets) < 2:
+        return None
+    mean = sum(log_rets) / len(log_rets)
+    variance = sum((r - mean) ** 2 for r in log_rets) / len(log_rets)
+    period_vol_1m = math.sqrt(variance)
+    period_vol_5m = period_vol_1m * math.sqrt(5)
+    return period_vol_5m
+
+def norm_cdf(x):
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+def fair_prob_up(current_price, strike_price, period_vol):
+    if period_vol <= 0 or current_price <= 0:
+        return 0.5
+    diff = (current_price - strike_price) / current_price
+    d = diff / period_vol
+    return norm_cdf(d)
+
+def calc_vol_edge(current_price, strike_price, up_market_price, down_market_price):
+    period_vol = calc_realized_vol()
+    if period_vol is None or period_vol <= 0:
+        return None, 0, {}
+    fp_up = fair_prob_up(current_price, strike_price, period_vol)
+    fp_down = 1.0 - fp_up
+    edge_up = fp_up - up_market_price
+    edge_down = fp_down - down_market_price
+    threshold = strat("vol_edge_threshold", 0.05)
+    max_conf = strat("vol_edge_max_conf", 95)
+    base_conf = strat("vol_edge_base_conf", 50)
+    if edge_up > threshold and edge_up >= edge_down:
+        return "UP", min(max_conf, int(base_conf + edge_up * 100)), {
+            "fair_prob": round(fp_up, 3), "market_prob": round(up_market_price, 3),
+            "edge": round(edge_up, 3), "period_vol": round(period_vol, 5),
+        }
+    if edge_down > threshold:
+        return "DOWN", min(max_conf, int(base_conf + edge_down * 100)), {
+            "fair_prob": round(fp_down, 3), "market_prob": round(down_market_price, 3),
+            "edge": round(edge_down, 3), "period_vol": round(period_vol, 5),
+        }
+    return None, 0, {
+        "fair_prob_up": round(fp_up, 3), "fair_prob_down": round(fp_down, 3),
+        "market_up": round(up_market_price, 3), "market_down": round(down_market_price, 3),
+        "max_edge": round(max(edge_up, edge_down), 3), "period_vol": round(period_vol, 5),
+    }
+
+# ── Funding Rate ───────────────────────────────────────
+def get_funding_rate():
+    try:
+        resp = requests.get(
+            "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT",
+            timeout=5
+        )
+        data = resp.json()
+        return float(data.get("lastFundingRate", 0))
+    except:
+        return None
+
+def get_funding_bias(funding_rate):
+    if funding_rate is None:
+        return 0
+    if funding_rate > 0.0001:
+        return -1
+    elif funding_rate < -0.0001:
+        return 1
+    return 0
 
 def calc_trend_bias():
     with price_lock:
@@ -600,6 +718,27 @@ def calc_trend_bias():
         return 0
     avg_120 = sum(p for _, p in recent_120) / len(recent_120)
     return (current - avg_120) / avg_120 * 100
+
+def get_trend_direction():
+    """Returns 'UP', 'DOWN', or 'NEUTRAL' based on 3m price trend."""
+    with price_lock:
+        buf = list(price_buffer)
+        current = last_btc_price
+    if len(buf) < 30 or current == 0:
+        return "NEUTRAL"
+    now = time.time()
+    recent_180 = [(t, p) for t, p in buf if t >= now - 180]
+    if len(recent_180) < 15:
+        return "NEUTRAL"
+    prices = [p for _, p in recent_180]
+    sma_short = sum(prices[-5:]) / 5
+    sma_long = sum(prices) / len(prices)
+    delta = (sma_short - sma_long) / sma_long * 100
+    if delta > 0.03:
+        return "UP"
+    elif delta < -0.03:
+        return "DOWN"
+    return "NEUTRAL"
 
 def calc_momentum_and_accel():
     with price_lock:
@@ -627,13 +766,15 @@ def calc_momentum_and_accel():
     return delta_price, acceleration, current
 
 def get_momentum_direction(delta_price, acceleration):
-    if delta_price > 50 and acceleration > 0:
+    strong = strat("momentum_delta_strengthening", 50)
+    moderate = strat("momentum_delta_moderate", 25)
+    if delta_price > strong and acceleration > 0:
         return "UP", "strengthening"
-    elif delta_price < -50 and acceleration < 0:
+    elif delta_price < -strong and acceleration < 0:
         return "DOWN", "strengthening"
-    elif delta_price > 25:
+    elif delta_price > moderate:
         return "UP", "moderate"
-    elif delta_price < -25:
+    elif delta_price < -moderate:
         return "DOWN", "moderate"
     return "NEUTRAL", "weak"
 
@@ -678,12 +819,123 @@ def calc_odds_edge(current_btc, price_to_beat, up_price, down_price):
         return "DOWN", round(edge_down * 100, 1), f"BTC {diff_pct:+.3f}% vs strike, DOWN mispriced by {edge_down:.3f}"
     return None, 0, f"no_edge (diff={diff_pct:+.3f}%, edge_up={edge_up:.3f}, edge_down={edge_down:.3f})"
 
+# ── Latency Arb (Binance moves first, Polymarket lags) ──
+def detect_latency_arb(current_price, up_price, down_price, time_remaining):
+    with price_lock:
+        buf = list(price_buffer)
+    now = time.time()
+    cutoff_30 = now - 30
+    cutoff_60 = now - 60
+    recent_30 = [(t, p) for t, p in buf if t >= cutoff_30]
+    recent_60 = [(t, p) for t, p in buf if cutoff_60 <= t < cutoff_30]
+    if len(recent_30) < 3 or len(recent_60) < 3:
+        return None, 0
+    p30 = recent_30[-1][1]
+    p60 = recent_60[0][1] if recent_60 else recent_30[0][1]
+    if p60 <= 0:
+        return None, 0
+    move_pct = (p30 - p60) / p60 * 100
+    min_move = strat("latency_arb_move_pct", 0.3)
+    max_token = strat("latency_arb_max_token_price", 0.70)
+    base_conf = strat("latency_arb_base_conf", 60)
+    conf_scale = strat("latency_arb_conf_per_pct", 50)
+    if abs(move_pct) < min_move:
+        return None, 0
+    direction = "UP" if move_pct > 0 else "DOWN"
+    opp_price = up_price if direction == "UP" else down_price
+    if opp_price > max_token:
+        return None, 0
+    confidence = min(90, int(base_conf + abs(move_pct) * conf_scale))
+    log_to_file(f"LATENCY_ARB: {direction} (BTC moved {move_pct:+.2f}%, token ${opp_price:.3f})", "INFO")
+    return direction, confidence
+
+# ── Window Delta Signal (trade gap from strike in final seconds) ──
+def window_delta_signal(current_price, strike_price, up_price, down_price, time_remaining):
+    t_max = strat("window_delta_time_max", 50)
+    t_min = strat("window_delta_time_min", 10)
+    min_delta = strat("window_delta_min_delta_pct", 0.2)
+    max_token = strat("window_delta_max_token_price", 0.70)
+    base_conf = strat("window_delta_base_conf", 50)
+    conf_per = strat("window_delta_conf_per_pct", 15)
+    if time_remaining > t_max or time_remaining < t_min:
+        return None, 0
+    if not strike_price or strike_price <= 0 or current_price <= 0:
+        return None, 0
+    delta_pct = abs(current_price - strike_price) / strike_price * 100
+    if delta_pct < min_delta:
+        return None, 0
+    direction = "UP" if current_price > strike_price else "DOWN"
+    opp_price = up_price if direction == "UP" else down_price
+    if opp_price > max_token:
+        return None, 0
+    conf = min(85, int(base_conf + delta_pct * conf_per))
+    log_to_file(f"WINDOW_DELTA: {direction} (delta={delta_pct:.2f}%, token ${opp_price:.3f})", "INFO")
+    return direction, conf
+
+# ── Cheap Side Reversal (buy the $0.15 side) ──
+def cheap_side_reversal(up_price, down_price, delta_price, acceleration):
+    threshold = strat("cheap_side_threshold", 0.85)
+    accel_thresh = strat("cheap_side_accel_threshold", 10)
+    conf_base = strat("cheap_side_conf_base", 60)
+    conf_per = strat("cheap_side_conf_per_unit", 0.5)
+    conf_max = strat("cheap_side_max_conf", 75)
+    if up_price > threshold and delta_price > 0 and acceleration < -accel_thresh:
+        conf = min(conf_max, int(conf_base + abs(acceleration) * conf_per))
+        log_to_file(f"CHEAP_SIDE: DOWN at ${down_price:.3f} (UP=${up_price:.3f}, accel={acceleration:.1f})", "INFO")
+        return "DOWN", conf
+    if down_price > threshold and delta_price < 0 and acceleration > accel_thresh:
+        conf = min(conf_max, int(conf_base + abs(acceleration) * conf_per))
+        log_to_file(f"CHEAP_SIDE: UP at ${up_price:.3f} (DOWN=${down_price:.3f}, accel={acceleration:.1f})", "INFO")
+        return "UP", conf
+    return None, 0
+
+# ── Volume Confirmation ──
+def volume_confirmed():
+    vol_ratio = strat("volume_ratio_threshold", 0.5)
+    with price_lock:
+        buf = list(price_buffer)
+    now = time.time()
+    recent = [(t, p) for t, p in buf if t >= now - 30]
+    older = [(t, p) for t, p in buf if now - 120 <= t < now - 30]
+    if len(older) < 5 or len(recent) < 3:
+        return True
+    vol_recent = len(recent)
+    vol_older = len(older) / 3
+    if vol_older <= 0:
+        return True
+    return vol_recent / vol_older >= vol_ratio
+
+# ── Fee-Aware Edge Gate ──
+def fee_aware_gate(direction, confidence, token_price):
+    be_wr = token_price * 100
+    pred_wr = confidence
+    buffer = strat("fee_buffer_pp", 5)
+    if pred_wr < be_wr + buffer:
+        return False
+    return True
+
+# ── Signal Guard (120s same-direction cooldown) ──
+def check_signal_guard(direction):
+    global last_signal_guard
+    now = time.time()
+    cooldown = strat("signal_guard_cooldown", 120)
+    if last_signal_guard["direction"] == direction and now - last_signal_guard["timestamp"] < cooldown:
+        log_to_file(f"SIGNAL_GUARD: {direction} suppressed (same direction within {cooldown}s)", "INFO")
+        return False
+    return True
+
+def update_signal_guard(direction):
+    global last_signal_guard
+    last_signal_guard["direction"] = direction
+    last_signal_guard["timestamp"] = time.time()
+
 # ── Module 4: Arbitrage Engine ────────────────────────────
 def check_arb(up_ask, down_ask):
     if up_ask <= 0 or down_ask <= 0:
         return None, 0.0
     total_cost = up_ask + down_ask
-    if total_cost < 0.985:
+    threshold = strat("arb_threshold", 0.985)
+    if total_cost < threshold:
         profit = 1.0 - total_cost
         return "ARB", profit
     return None, 0.0
@@ -691,7 +943,8 @@ def check_arb(up_ask, down_ask):
 def check_hedge_leg2(leg1_entry_price, opposite_ask):
     if leg1_entry_price <= 0 or opposite_ask <= 0:
         return False
-    return (leg1_entry_price + opposite_ask) <= 0.99
+    threshold = strat("hedge_threshold", 0.99)
+    return (leg1_entry_price + opposite_ask) <= threshold
 
 # ── Outcome Tracking ──────────────────────────────────────
 def check_outcomes(baselines):
@@ -715,7 +968,7 @@ def check_outcomes(baselines):
             try:
                 resp = requests.get(
                     f"https://api.binance.com/api/v3/klines"
-                    f"?symbol=BTCUSDT&interval=1m&startTime={wts * 1000}&limit=1",
+                    f"?symbol=BTCUSDT&interval=1m&startTime={(wts + 300) * 1000}&limit=1",
                     timeout=5
                 )
                 data = resp.json()
@@ -727,12 +980,12 @@ def check_outcomes(baselines):
                 try:
                     resp = requests.get(
                         f"https://min-api.cryptocompare.com/data/v2/histominute"
-                        f"?fsym=BTC&tsym=USD&limit=1&toTs={wts + 60}",
+                        f"?fsym=BTC&tsym=USD&limit=1&toTs={wts + 300}",
                         timeout=5
                     )
                     cc_data = resp.json()["Data"]["Data"]
                     if cc_data and len(cc_data) > 0:
-                        resolve_open_price = float(cc_data[-1]["open"])
+                        resolve_open_price = float(cc_data[-1]["close"])
                 except:
                     continue
             if not resolve_open_price:
@@ -768,6 +1021,7 @@ def check_outcomes(baselines):
 
             if risk_manager:
                 risk_manager.record_outcome(win, bet, token_price)
+                risk_manager.release_position()
 
         if updated:
             safe_write_json(TRADES_PATH, trades)
@@ -780,16 +1034,20 @@ def check_outcomes(baselines):
 
 # ── Signal Priority Stack (Module 6) ────────────────────
 def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, down_ask,
-                          window_ts, time_remaining, chainlink_px, already_traded):
+                          window_ts, time_remaining, chainlink_px, already_traded,
+                          up_price=0.5, down_price=0.5):
     """
     Priority order:
-    1. Arb opportunity (yes_ask + no_ask < 0.985) -> ALWAYS take
-    2. Hedge Leg 2 -> Execute if condition met
-    3. Wall + Momentum agree (any phase 2-4) -> Core directional
-    4. Wall bias alone (strong order book imbalance) -> Directional
-    5. Oracle lag edge -> Trade divergence direction
-    6. Momentum alone (no wall) -> Lower confidence
-    7. No signal -> DO NOTHING
+    1. ARB (yes_ask + no_ask < 0.985) -> risk-free
+    2. Latency Arb (Binance moved >0.3%, Polymarket < $0.70) -> best entry
+    3. Window Delta (T-50s to T-10s, delta > 0.2%, token < $0.70)
+    4. Cheap Side (one side > $0.85, momentum decelerating)
+    5. Vol Edge (fair prob vs market prob mismatch >5%)
+    6. Wall + Momentum agree (phase 2-4)
+    7. Wall bias alone (strong order book imbalance)
+    8. Oracle lag edge
+    9. Momentum alone (no wall)
+    10. Mean Reversion (fade overextended moves)
     """
     if already_traded:
         return None, 0, {}, "ALREADY_TRADED", 0
@@ -802,22 +1060,25 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
     lag_score = calc_lag_score(price_now, chainlink_px)
 
     bin_dir = None
-    if lag_score > 0.15 and chainlink_px > 0:
+    lag_min = strat("edge_lag_min", 0.15)
+    if lag_score > lag_min and chainlink_px > 0:
         lag_diff = (price_now - chainlink_px) / chainlink_px * 100
-        if lag_diff > 0.15:
+        if lag_diff > lag_min:
             bin_dir = "UP"
-        elif lag_diff < -0.15:
+        elif lag_diff < -lag_min:
             bin_dir = "DOWN"
 
     priority = 0
     decision = None
     confidence = 0
     signal_type = "NONE"
+    vol_info = {}
 
     # Priority 1: Arb (always take)
-    arb_dir, arb_profit = check_arb(up_ask, down_ask)
-    if arb_dir:
-        return "ARB", 100, {
+    if module_enabled("signal_arb"):
+        arb_dir, arb_profit = check_arb(up_ask, down_ask)
+        if arb_dir:
+            return "ARB", 100, {
             "arb_profit": round(arb_profit * 100, 2),
             "total_cost": round(up_ask + down_ask, 4),
             "phase": phase, "wall_ratio": round(wall_ratio, 2),
@@ -826,31 +1087,106 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
             "priority": 1,
         }, "ARB", 5.0
 
-    # Priority 2: Hedge Leg 2 (handled separately in bot loop)
+    # Priority 1.5: Window Delta Override (T-10s, BTC > threshold from strike)
+    if module_enabled("signal_delta_override") and time_remaining <= 10 and price_to_beat and price_to_beat > 0 and price_now > 0 and up_price > 0 and down_price > 0:
+        delta_thresh = strat("delta_override_delta_threshold", 0.10)
+        max_token = strat("delta_override_max_token_price", 0.80)
+        base_conf = strat("delta_override_base_conf", 60)
+        conf_scale = strat("delta_override_conf_scale", 50)
+        delta_pct = abs(price_now - price_to_beat) / price_to_beat * 100
+        if delta_pct > delta_thresh:
+            override_dir = "UP" if price_now > price_to_beat else "DOWN"
+            override_price = up_price if override_dir == "UP" else down_price
+            if override_price > max_token:
+                log_to_file(f"DELTA_OVERRIDE SKIP: {override_dir} at ${override_price:.3f} too expensive (need ≤${max_token:.2f})", "INFO")
+            else:
+                override_conf = min(85, int(base_conf + delta_pct * conf_scale))
+                log_to_file(f"DELTA_OVERRIDE: {override_dir} (delta={delta_pct:.2f}%, token=${override_price:.3f})", "INFO")
+                return override_dir, override_conf, {
+                    "phase": phase, "wall_ratio": round(wall_ratio, 2),
+                    "lag_score": round(lag_score, 2), "delta_price": round(delta_price, 2),
+                    "acceleration": round(acceleration, 2), "signal_type": "DELTA_OVERRIDE",
+                    "priority": 1.5, "delta_pct": round(delta_pct, 2),
+                }, "DELTA_OVERRIDE", 1.5
 
-    # Priority 3: Wall + Momentum agree (any phase 2-4)
-    if priority < 3 and phase >= 2 and wall_dir != "NEUTRAL" and mom_dir == wall_dir:
+    # Priority 2: Latency Arb (Binance moves first, Polymarket lags)
+    if module_enabled("signal_latency_arb") and up_price > 0 and down_price > 0:
+        lat_dir, lat_conf = detect_latency_arb(price_now, up_price, down_price, time_remaining)
+        if lat_dir:
+            avg_price = up_price if lat_dir == "UP" else down_price
+            if fee_aware_gate(lat_dir, lat_conf, avg_price):
+                log_to_file(f"LATENCY_ARB WIN: {lat_dir} conf={lat_conf}% at ${avg_price:.3f}", "INFO")
+                return lat_dir, lat_conf, {
+                    "phase": phase, "wall_ratio": round(wall_ratio, 2),
+                    "lag_score": round(lag_score, 2), "delta_price": round(delta_price, 2),
+                    "acceleration": round(acceleration, 2), "signal_type": "LATENCY_ARB",
+                    "priority": 2, "mom_dir": mom_dir, "wall_dir": wall_dir,
+                    "bin_dir": bin_dir, "mom_strength": mom_strength,
+                }, "LATENCY_ARB", 2
+
+    # Priority 3: Window Delta (trade gap from strike in final seconds)
+    if module_enabled("signal_window_delta") and up_price > 0 and down_price > 0:
+        wd_dir, wd_conf = window_delta_signal(price_now, price_to_beat, up_price, down_price, time_remaining)
+        if wd_dir:
+            avg_price = up_price if wd_dir == "UP" else down_price
+            if fee_aware_gate(wd_dir, wd_conf, avg_price):
+                log_to_file(f"WINDOW_DELTA WIN: {wd_dir} conf={wd_conf}% at ${avg_price:.3f}", "INFO")
+                return wd_dir, wd_conf, {
+                    "phase": phase, "wall_ratio": round(wall_ratio, 2),
+                    "lag_score": round(lag_score, 2), "delta_price": round(delta_price, 2),
+                    "acceleration": round(acceleration, 2), "signal_type": "WINDOW_DELTA",
+                    "priority": 3, "mom_dir": mom_dir, "wall_dir": wall_dir,
+                    "bin_dir": bin_dir, "mom_strength": mom_strength,
+                }, "WINDOW_DELTA", 3
+
+    # Priority 4: Cheap Side Reversal (buy the $0.15 side)
+    if module_enabled("signal_cheap_side"):
+        cs_dir, cs_conf = cheap_side_reversal(up_price, down_price, delta_price, acceleration)
+        if cs_dir:
+            avg_price = up_price if cs_dir == "UP" else down_price
+            if fee_aware_gate(cs_dir, cs_conf, avg_price):
+                log_to_file(f"CHEAP_SIDE WIN: {cs_dir} conf={cs_conf}% at ${avg_price:.3f}", "INFO")
+                return cs_dir, cs_conf, {
+                    "phase": phase, "wall_ratio": round(wall_ratio, 2),
+                    "lag_score": round(lag_score, 2), "delta_price": round(delta_price, 2),
+                    "acceleration": round(acceleration, 2), "signal_type": "CHEAP_SIDE",
+                    "priority": 4, "mom_dir": mom_dir, "wall_dir": wall_dir,
+                    "bin_dir": bin_dir, "mom_strength": mom_strength,
+                }, "CHEAP_SIDE", 4
+
+    # Priority 5: Vol Edge (systematic mispricing via realized vol)
+    if priority < 5 and module_enabled("signal_vol_edge"):
+        up_mid = (up_bid + up_ask) / 2
+        down_mid = (down_bid + down_ask) / 2
+        vol_dir, vol_conf, vol_info = calc_vol_edge(price_now, price_to_beat, up_mid, down_mid)
+        if vol_dir:
+            priority = 5
+            decision = vol_dir
+            confidence = vol_conf
+            signal_type = "VOL_EDGE"
+
+    # Priority 6: Wall + Momentum agree (any phase 2-4)
+    if priority < 6 and phase >= 2 and wall_dir != "NEUTRAL" and mom_dir == wall_dir and module_enabled("signal_wall_momentum"):
         if time_remaining > 30:
             wall_strength = abs(wall_ratio - 1.0)
             ptb_diff = abs(price_now - price_to_beat) if price_to_beat else 0
             if phase >= 3 and ptb_diff > 30 and wall_strength > 1.0:
-                priority = 3
+                priority = 6
                 decision = mom_dir
                 confidence = 80
                 signal_type = "CORE_SNIPER"
             elif phase == 2 and ptb_diff > 15 and wall_strength > 0.5:
-                priority = 3
+                priority = 6
                 decision = mom_dir
                 confidence = 75
                 signal_type = "WALL_MOMENTUM"
 
-    # Priority 4: Wall bias alone (strong order book, no momentum confirmation yet)
-    if priority < 4 and phase >= 2 and wall_dir != "NEUTRAL" and time_remaining > 30:
+    # Priority 7: Wall bias alone (strong order book, no momentum confirmation yet)
+    if priority < 7 and phase >= 2 and wall_dir != "NEUTRAL" and time_remaining > 30 and module_enabled("signal_wall_bias"):
         wall_strength = abs(wall_ratio - 1.0)
         if wall_strength > 1.5:
             ptb_diff = abs(price_now - price_to_beat) if price_to_beat else 0
             if ptb_diff < 100:
-                # Don't fight strong momentum unless it's decelerating (reversal setup)
                 momentum_opposes = (mom_dir != "NEUTRAL" and mom_dir != wall_dir)
                 if momentum_opposes:
                     accel_supports_wall = (wall_dir == "UP" and acceleration > 0) or \
@@ -858,35 +1194,37 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
                     if not accel_supports_wall:
                         log_to_file(f"WALL BIAS SKIPPED: {wall_dir} vs {mom_dir} momentum (accel={acceleration:.1f})", "INFO")
                     else:
-                        priority = 4
+                        priority = 7
                         decision = wall_dir
                         confidence = 70
                         signal_type = "WALL_BIAS"
                         log_to_file(f"WALL BIAS REVERSAL: {decision} (ratio={wall_ratio:.2f}, accel={acceleration:.1f})", "INFO")
                 else:
-                    priority = 4
+                    priority = 7
                     decision = wall_dir
                     confidence = 75
                     signal_type = "WALL_BIAS"
                     log_to_file(f"WALL BIAS: {decision} (ratio={wall_ratio:.2f})", "INFO")
 
-    # Priority 5: Oracle lag edge
-    if priority < 4 and bin_dir and 0.15 < lag_score <= 2.0:
-        priority = 5
-        decision = bin_dir
-        confidence = 75
-        signal_type = "ORACLE_LAG"
+    # Priority 8: Oracle lag edge
+    if priority < 8 and bin_dir and module_enabled("signal_oracle_lag"):
+        edge_lag_max = strat("edge_lag_max", 2.0)
+        if lag_min < lag_score <= edge_lag_max:
+            priority = 8
+            decision = bin_dir
+            confidence = 75
+            signal_type = "ORACLE_LAG"
 
-    # Priority 6: Momentum alone (no wall)
-    if priority < 5 and phase >= 2 and mom_dir != "NEUTRAL" and time_remaining > 30:
+    # Priority 9: Momentum alone (no wall)
+    if priority < 8 and phase >= 2 and mom_dir != "NEUTRAL" and time_remaining > 30 and module_enabled("signal_momentum_only"):
         if mom_strength == "strengthening" or abs(delta_price) > 50:
-            priority = 6
+            priority = 9
             decision = mom_dir
             confidence = 70
             signal_type = "MOMENTUM_ONLY"
 
-    # Priority 7: Mean Reversion (fade overextended moves)
-    if priority < 6 and phase >= 2 and abs(delta_price) > 80 and time_remaining > 45:
+    # Priority 10: Mean Reversion (fade overextended moves)
+    if priority < 9 and phase >= 2 and abs(delta_price) > 80 and time_remaining > 45 and module_enabled("signal_mean_reversion"):
         reversion_dir = "DOWN" if delta_price > 80 else "UP"
         reversion_conf = min(75, 55 + abs(delta_price) * 0.15)
         if mom_strength == "weakening" or abs(acceleration) > 30:
@@ -895,12 +1233,28 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
             reversion_conf += 5
         if phase >= 3:
             reversion_conf += 5
-        priority = 7
+        priority = 10
         decision = reversion_dir
         confidence = min(85, int(reversion_conf))
         signal_type = "MEAN_REVERSION"
 
     if decision:
+        # Trend alignment filter: reduce confidence if trading against the trend
+        trend_penalty = strat("trend_mismatch_penalty", 15)
+        trend_bonus = strat("trend_match_bonus", 5)
+        trend_dir = get_trend_direction()
+        if trend_dir != "NEUTRAL" and decision != trend_dir:
+            confidence = max(50, confidence - trend_penalty)
+            log_to_file(f"TREND_MISMATCH: {decision} vs trend {trend_dir} — confidence reduced", "INFO")
+        elif trend_dir == decision:
+            confidence = min(99, confidence + trend_bonus)
+        # Momentum opposition filter: don't trade against strong momentum
+        mom_opp_delta = strat("momentum_opposition_delta", 30)
+        mom_opp_cap = strat("momentum_opposition_cap", 65)
+        if (decision == "UP" and delta_price < -mom_opp_delta) or (decision == "DOWN" and delta_price > mom_opp_delta):
+            confidence = max(50, min(confidence, mom_opp_cap))
+            log_to_file(f"MOMENTUM_BLOCK: {decision} but delta={delta_price:.1f} — confidence capped", "INFO")
+
         bayes_mod = get_bayesian_confidence_modifier(signal_type, decision, phase)
         confidence = max(50, min(99, confidence + bayes_mod))
         return decision, confidence, {
@@ -910,7 +1264,7 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
             "priority": priority, "mom_dir": mom_dir, "wall_dir": wall_dir,
             "bin_dir": bin_dir, "mom_strength": mom_strength,
             "bayes_mod": bayes_mod,
-        }, signal_type, priority
+        } | (vol_info if signal_type == "VOL_EDGE" else {}), signal_type, priority
 
     return None, 0, {
         "phase": phase, "wall_ratio": round(wall_ratio, 2),
@@ -918,12 +1272,12 @@ def evaluate_signal_stack(price_now, price_to_beat, up_bid, up_ask, down_bid, do
         "acceleration": round(acceleration, 2), "signal_type": "NONE",
         "priority": 0, "mom_dir": mom_dir, "wall_dir": wall_dir,
         "bin_dir": bin_dir, "mom_strength": mom_strength,
-    }, "NONE", 0
+    } | vol_info, "NONE", 0
 
 # ── Trade Execution v6.0 (LIMIT orders, Module 6) ─────────
 def execute_trade(direction, token_id, token_price, btc_price, slug,
                   window_ts, confidence, signals, cfg, client=None, market=None, price_to_beat=0):
-    global risk_manager
+    global risk_manager, _traded_windows, _failed_window_attempts
     is_dry = cfg.get("dry_run", True)
     status = "simulated"
     order_id = "N/A"
@@ -939,16 +1293,26 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
         if not allowed:
             log_to_file(f"RISK_BLOCK: {risk_reason}")
             return {"blocked": True, "reason": risk_reason}
-        final_bet = risk_manager.get_bet_size(base_bet, signals.get("edge", 0) / 100.0,
-                                               confidence, is_high_conf, is_arb)
-    else:
-        final_bet = base_bet
-    final_bet = max(min(final_bet, base_bet), 1.0)  # Cap at configured bet_size, min 1.0
+
+    final_bet = base_bet
+
+    # Cap bet to actual balance (leave $0.01 buffer)
+    real_balance = account_stats.get("balance", 0)
+    if not is_dry and real_balance > 0:
+        max_afford = max(0.5, real_balance - 0.01)
+        final_bet = min(final_bet, max_afford)
+        if final_bet < 0.5:
+            log_to_file(f"BALANCE_BLOCK: balance=${real_balance:.2f} too low for $0.50 min bet", "WARN")
+            return {"blocked": True, "reason": f"balance ${real_balance:.2f} too low"}
 
     if not is_dry and client:
         try:
             from py_clob_client_v2.clob_types import OrderType
             log_to_file(f"LIVE ORDER: {direction} ${final_bet} @ ${token_price:.3f}")
+
+            markup = strat("order_price_markup", 1.05)
+            max_price = strat("max_order_price", 0.99)
+            order_price = round(min(token_price * markup, max_price), 2)
 
             if is_arb:
                 # FOK for arb trades
@@ -958,7 +1322,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                     token_id=token_id,
                     amount=final_bet,
                     side="BUY",
-                    price=0,
+                    price=order_price,
                 )
                 signed_order = client.create_market_order(order_args)
                 resp = client.post_order(signed_order, OrderType.FOK)
@@ -976,7 +1340,7 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
                     token_id=token_id,
                     amount=final_bet,
                     side="BUY",
-                    price=0,
+                    price=order_price,
                 )
                 signed_order = client.create_market_order(order_args)
                 resp = client.post_order(signed_order, OrderType.FAK)
@@ -1049,11 +1413,18 @@ def execute_trade(direction, token_id, token_price, btc_price, slug,
             price_to_beat, wall_ratio, lag_score, delta_price, acceleration,
             phase, signal_type, confidence
         )
+        # Track in-memory to prevent duplicate entries
+        _traded_windows.add(window_ts)
+        _failed_window_attempts.pop(window_ts, None)
+    else:
+        # Track failure count per window to limit retry spam
+        _failed_window_attempts[window_ts] = _failed_window_attempts.get(window_ts, 0) + 1
     return {"blocked": False, "status": status, "order_id": order_id}
 
 # ── Bot Main Loop v6.0 ───────────────────────────────────
 def bot_loop():
     global bot_running, current_strategy_info, risk_manager, chainlink_price, last_chainlink_update
+    global _traded_windows, _failed_window_attempts, _cfg_cache
     load_dotenv(ENV_PATH)
 
     addr = os.getenv("POLY_WALLET_ADDRESS", "")
@@ -1082,6 +1453,7 @@ def bot_loop():
     while bot_running:
         try:
             cfg = safe_read_json(CONFIG_PATH) or {"dry_run": True}
+            _cfg_cache = cfg
             now = time.time()
             window_ts = get_current_5min_ts()
             window_offset = int(now % 300)
@@ -1090,20 +1462,27 @@ def bot_loop():
 
             if risk_manager:
                 risk_manager.cfg = cfg
+                risk_manager._load_cfg()
 
-            # Chainlink fallback poll every 30s if WS not updating
-            if chainlink_price == 0 or (now - last_chainlink_fallback > 30):
+            # Chainlink fallback poll every 10s (WS disabled, this is the only source)
+            cl_fb_int = strat("chainlink_fallback_interval", 10)
+            cl_fb_stale = strat("chainlink_fallback_stale_threshold", 10)
+            outcome_int = strat("outcome_check_interval", 120)
+            market_int = strat("market_fetch_interval", 30)
+            balance_int = strat("balance_fetch_interval", 30)
+
+            if chainlink_price == 0 or (now - last_chainlink_fallback > cl_fb_int):
                 last_chainlink_fallback = now
-                if chainlink_price == 0 or (now - last_chainlink_update > 15):
+                if chainlink_price == 0 or (now - last_chainlink_update > cl_fb_stale):
                     threading.Thread(target=fetch_chainlink_fallback, daemon=True).start()
 
-            if now - last_outcome_check > 120:
+            if now - last_outcome_check > outcome_int:
                 threading.Thread(
                     target=check_outcomes, args=(dict(market_baselines),), daemon=True
                 ).start()
                 last_outcome_check = now
 
-            if now - last_market_fetch > 30:
+            if now - last_market_fetch > market_int:
                 market = get_polymarket_market(slug)
                 last_market_fetch = now
                 cached_market = market
@@ -1130,6 +1509,7 @@ def bot_loop():
             down_price = float(outcomes[1])
 
             if window_ts not in market_baselines:
+                window_best_signal.clear()
                 line = get_price_to_beat(window_ts, market.get("conditionId"))
                 market_baselines[window_ts] = line
                 if line:
@@ -1140,6 +1520,14 @@ def bot_loop():
                 price_now = last_btc_price
                 chainlink_px = chainlink_price
 
+            # Fetch account balance periodically
+            addr = os.getenv("POLY_WALLET_ADDRESS", "")
+            bal_int = strat("balance_fetch_interval", 30)
+            if addr and (time.time() - account_stats["last_updated"] > bal_int):
+                threading.Thread(
+                    target=fetch_account_stats, args=(addr,), daemon=True
+                ).start()
+
             # Initialize CLOB client
             client = None
             if not cfg.get("dry_run", True):
@@ -1147,11 +1535,6 @@ def bot_loop():
                 if cached_client is None or cfg_key != cached_client_cfg:
                     try:
                         pk = os.getenv("POLY_PRIVATE_KEY")
-                        addr = os.getenv("POLY_WALLET_ADDRESS")
-                        if addr and (time.time() - account_stats["last_updated"] > 120):
-                            threading.Thread(
-                                target=fetch_account_stats, args=(addr,), daemon=True
-                            ).start()
                         if pk and addr:
                             from py_clob_client_v2.client import ClobClient
                             from py_clob_client_v2.clob_types import ApiCreds
@@ -1198,7 +1581,16 @@ def bot_loop():
             already_traded = any(
                 t.get("window_ts") == window_ts and t.get("market_slug") == slug
                 for t in trades
-            )
+            ) or window_ts in _traded_windows
+
+            # Limit retry spam: skip if we've already failed this window repeatedly
+            if not already_traded:
+                late_thresh = strat("retry_spam_late_threshold", 10)
+                max_attempts_late = strat("max_retry_attempts_late", 5)
+                max_attempts_normal = strat("max_retry_attempts_normal", 2)
+                max_attempts = max_attempts_late if time_remaining <= late_thresh else max_attempts_normal
+                if _failed_window_attempts.get(window_ts, 0) >= max_attempts:
+                    already_traded = True
             diff_pct = (price_now - price_to_beat) / price_to_beat * 100 if price_to_beat else 0
             delta_price, acceleration, _ = calc_momentum_and_accel()
             wall_ratio, bid_wall, ask_wall = calc_wall_ratio()
@@ -1207,10 +1599,12 @@ def bot_loop():
             phase = get_window_phase(time_remaining)
 
             # Get ask/bid prices from market for arb check
-            up_bid = up_price * 0.995
-            up_ask = up_price * 1.005
-            down_bid = down_price * 0.995
-            down_ask = down_price * 1.005
+            arb_bid_markup = 0.995
+            arb_ask_markup = 1.005
+            up_bid = up_price * arb_bid_markup
+            up_ask = up_price * arb_ask_markup
+            down_bid = down_price * arb_bid_markup
+            down_ask = down_price * arb_ask_markup
             try:
                 tokens = market.get("tokens", [])
                 if len(tokens) >= 2:
@@ -1254,167 +1648,260 @@ def bot_loop():
                 time.sleep(5)
                 continue
 
-            if now - last_signal_check >= SIGNAL_CHECK_INTERVAL:
+            check_int_late = strat("signal_check_interval_late", 2)
+            check_int_mid = strat("signal_check_interval_mid", 5)
+            check_interval = check_int_late if time_remaining <= 10 else (check_int_mid if time_remaining <= 30 else SIGNAL_CHECK_INTERVAL)
+            if time_remaining > 5 and now - last_signal_check >= check_interval:
                 last_signal_check = now
+            elif time_remaining <= 5:
+                pass  # T-5s hard deadline below handles this
 
-                # ── Module 4: Arb check every 10s ─────────
-                arb_dir, arb_profit = check_arb(up_ask, down_ask)
+            # ── Module 4: Arb check every 10s ─────────
+            arb_dir, arb_profit = check_arb(up_ask, down_ask)
 
-                # ── Module 4: Hedge Leg 2 check ──────────
-                hedge_trigger = False
-                for h_key, h_state in list(hedge_state.items()):
-                    if time.time() - h_state.get("time", 0) > 280:
-                        hedge_state.pop(h_key, None)
-                        continue
-                    if check_hedge_leg2(h_state["entry_price"], down_ask if h_state["direction"] == "UP" else up_ask):
-                        hedge_trigger = True
-                        log_to_file(f"HEDGE LEG 2 TRIGGERED for {h_key}", "INFO")
+            # ── Module 4: Hedge Leg 2 check ──────────
+            hedge_trigger = False
+            hedge_max_age = strat("market_baseline_max_age", 280)
+            for h_key, h_state in list(hedge_state.items()):
+                if time.time() - h_state.get("time", 0) > hedge_max_age:
+                    hedge_state.pop(h_key, None)
+                    continue
+                if check_hedge_leg2(h_state["entry_price"], down_ask if h_state["direction"] == "UP" else up_ask):
+                    hedge_trigger = True
+                    log_to_file(f"HEDGE LEG 2 TRIGGERED for {h_key}", "INFO")
 
-                # ── Signal Priority Stack ────────────────
-                direction, confidence, signals, signal_type, priority = evaluate_signal_stack(
-                    price_now, price_to_beat, up_bid, up_ask, down_bid, down_ask,
-                    window_ts, time_remaining, chainlink_px, already_traded
+            # ── Signal Priority Stack ────────────────
+            direction, confidence, signals, signal_type, priority = evaluate_signal_stack(
+                price_now, price_to_beat, up_bid, up_ask, down_bid, down_ask,
+                window_ts, time_remaining, chainlink_px, already_traded,
+                up_price=up_price, down_price=down_price
+            )
+
+            # Risk check
+            risk_status = "OK"
+            risk_reason = ""
+            if risk_manager:
+                target_price = up_price if direction == "UP" else down_price if direction else 0.5
+                _allowed, risk_reason = risk_manager.can_trade(
+                    target_price, lag_score, stale_sec
+                )
+                if not _allowed and direction is not None:
+                    risk_status = "BLOCKED"
+                    log_to_file(f"RISK_BLOCK: {risk_reason}")
+                    direction = None
+
+            vol_pct = calc_volatility()
+            trend_pct = calc_trend_bias()
+            with strategy_lock:
+                current_strategy_info.update({
+                    "slug": slug, "price_to_beat": price_to_beat,
+                    "current_diff": round(diff_pct, 3),
+                    "time_remaining": time_remaining,
+                    "up_price": up_price, "down_price": down_price,
+                    "edge": f"v6.0 | {direction or 'NONE'} {confidence:.1f}%",
+                    "confidence": confidence,
+                    "signals": signals,
+                    "risk_status": risk_status,
+                    "risk_reason": risk_reason,
+                    "phase": phase,
+                    "wall_ratio": round(wall_ratio, 2),
+                    "lag_score": round(lag_score, 2),
+                    "prioritized_signal": signal_type,
+                    "volatility_pct": round(vol_pct, 2),
+                    "trend_pct": round(trend_pct, 3),
+                })
+            if int(now) % 60 < SIGNAL_CHECK_INTERVAL or signal_type != "NONE":
+                log_to_file(
+                    f"BTC: ${price_now:.2f} | CL: ${chainlink_px:.2f} | "
+                    f"Strike: ${price_to_beat:.2f} | Diff: {diff_pct:+.3f}% | "
+                    f"Up: {up_price:.3f} Down: {down_price:.3f} | "
+                    f"Phase: {phase} | {time_remaining}s | "
+                    f"Wall: {wall_ratio:.2f} | Lag: {lag_score:.2f}% | "
+                    f"Vol: {vol_pct:.2f}% | Trend: {trend_pct:+.3f}% | "
+                    f"Signal: {signal_type} | Dir: {direction or 'NONE'} | "
+                    f"Conf: {confidence:.1f}% | Risk: {risk_status} | "
+                    f"Stale: {stale_sec:.0f}s"
                 )
 
-                # Risk check
-                risk_status = "OK"
-                risk_reason = ""
-                if risk_manager:
-                    target_price = up_price if direction == "UP" else down_price if direction else 0.5
-                    _allowed, risk_reason = risk_manager.can_trade(
-                        target_price, lag_score, stale_sec
-                    )
-                    if not _allowed and direction is not None:
-                        risk_status = "BLOCKED"
-                        log_to_file(f"RISK_BLOCK: {risk_reason}")
+            # ── Real balance vs tracked bankroll check ──
+            if risk_manager:
+                real_balance = account_stats.get("balance", 0)
+                if real_balance > 0:
+                    tracked = risk_manager.state["current_bankroll"]
+                    if abs(tracked - real_balance) > 1.0:
+                        log_to_file(f"BALANCE_SYNC: tracked=${tracked:.2f} -> actual=${real_balance:.2f}", "WARN")
+                        risk_manager.state["current_bankroll"] = real_balance
+                        risk_manager.state["peak_bankroll"] = max(risk_manager.state["peak_bankroll"], real_balance)
+                        risk_manager._save_state()
+
+            # ── Consecutive loss guard ────────────────
+            if direction and guard_enabled("consecutive_loss_guard"):
+                lookback = strat("consecutive_same_dir_lookback", 900)
+                resolve_thresh = strat("consecutive_same_dir_resolve_threshold", 360)
+                recent_same_dir = [t for t in trades
+                                   if t.get("direction") == direction
+                                   and t.get("window_ts", 0) < window_ts
+                                   and t.get("window_ts", 0) >= window_ts - lookback]
+                if recent_same_dir:
+                    last_same = max(recent_same_dir, key=lambda t: t.get("window_ts", 0))
+                    if last_same.get("outcome") is None and time.time() > last_same["window_ts"] + resolve_thresh:
+                        cl = last_same.get("chainlink_price", 0)
+                        base = last_same.get("price_to_beat", 0)
+                        if cl > 0 and base > 0:
+                            last_dir = last_same["direction"]
+                            won = (last_dir == "UP" and cl >= base) or (last_dir == "DOWN" and cl < base)
+                            last_same["outcome"] = "win" if won else "loss"
+                            last_same["resolve_price"] = cl
+                            safe_write_json(TRADES_PATH, trades)
+                    if last_same.get("outcome") == "loss":
+                        log_to_file(f"CONSECUTIVE LOSS BLOCK: {direction} skipped (last {direction} was a loss)")
                         direction = None
 
+            # ── Momentum consistency guard ──────────
+            if direction and guard_enabled("momentum_consistency"):
+                mum_block = strat("momentum_block_delta", 20)
+                if direction == "UP" and delta_price < -mum_block:
+                    log_to_file(f"MOMENTUM BLOCK: UP skipped (delta_price={delta_price:.1f} < -{mum_block})")
+                    direction = None
+                elif direction == "DOWN" and delta_price > mum_block:
+                    log_to_file(f"MOMENTUM BLOCK: DOWN skipped (delta_price={delta_price:.1f} > {mum_block})")
+                    direction = None
+
+            # ── Volatility guard ─────────────────────
+            if direction and guard_enabled("volatility_guard"):
+                vol_block = strat("volatility_block_spread_pct", 0.5)
                 vol_pct = calc_volatility()
+                if vol_pct > vol_block:
+                    log_to_file(f"VOLATILITY BLOCK: {direction} skipped (spread={vol_pct:.2f}% > {vol_block:.2f}%)")
+                    direction = None
+
+            # ── Volume confirmation ────────────────────
+            if direction and signal_type not in ("ARB", "RESOLUTION_HUNT", "DELTA_OVERRIDE") and time_remaining > 5 and guard_enabled("volume_confirmation"):
+                if not volume_confirmed():
+                    log_to_file(f"VOLUME_BLOCK: {direction} skipped (volume too low)", "INFO")
+                    direction = None
+
+            # ── Signal guard (same-direction cooldown) ──
+            if direction and signal_type not in ("ARB", "RESOLUTION_HUNT", "DELTA_OVERRIDE") and time_remaining > 5 and guard_enabled("signal_guard"):
+                if not check_signal_guard(direction):
+                    direction = None
+
+            # ── Stale feed guard (double-check) ──────
+            if direction and time_remaining > 5 and guard_enabled("stale_feed_guard"):
+                stale_sec = chainlink_stale_seconds()
+                stale_limit = _cfg_cache.get("risk_management", {}).get("stale_feed_seconds", 60)
+                if stale_sec > stale_limit:
+                    log_to_file(f"STALE_BLOCK: {direction} skipped (chainlink stale {stale_sec:.0f}s > {stale_limit}s)")
+                    direction = None
+
+            # ── Trend bias filter ────────────────────
+            if direction and time_remaining > 5 and guard_enabled("trend_bias_filter"):
+                trend_thresh = strat("trend_bias_threshold", 0.15)
                 trend_pct = calc_trend_bias()
-                with strategy_lock:
-                    current_strategy_info.update({
-                        "slug": slug, "price_to_beat": price_to_beat,
-                        "current_diff": round(diff_pct, 3),
-                        "time_remaining": time_remaining,
-                        "up_price": up_price, "down_price": down_price,
-                        "edge": f"v6.0 | {direction or 'NONE'} {confidence:.1f}%",
-                        "confidence": confidence,
-                        "signals": signals,
-                        "risk_status": risk_status,
-                        "risk_reason": risk_reason,
-                        "phase": phase,
-                        "wall_ratio": round(wall_ratio, 2),
-                        "lag_score": round(lag_score, 2),
-                        "prioritized_signal": signal_type,
-                        "volatility_pct": round(vol_pct, 2),
-                        "trend_pct": round(trend_pct, 3),
-                    })
-                if int(now) % 60 < SIGNAL_CHECK_INTERVAL or signal_type != "NONE":
-                    log_to_file(
-                        f"BTC: ${price_now:.2f} | CL: ${chainlink_px:.2f} | "
-                        f"Strike: ${price_to_beat:.2f} | Diff: {diff_pct:+.3f}% | "
-                        f"Up: {up_price:.3f} Down: {down_price:.3f} | "
-                        f"Phase: {phase} | {time_remaining}s | "
-                        f"Wall: {wall_ratio:.2f} | Lag: {lag_score:.2f}% | "
-                        f"Vol: {vol_pct:.2f}% | Trend: {trend_pct:+.3f}% | "
-                        f"Signal: {signal_type} | Dir: {direction or 'NONE'} | "
-                        f"Conf: {confidence:.1f}% | Risk: {risk_status} | "
-                        f"Stale: {stale_sec:.0f}s"
-                    )
+                if direction == "UP" and trend_pct < -trend_thresh:
+                    log_to_file(f"TREND BLOCK: UP skipped (trend={trend_pct:.3f}% bearish)")
+                    direction = None
+                elif direction == "DOWN" and trend_pct > trend_thresh:
+                    log_to_file(f"TREND BLOCK: DOWN skipped (trend={trend_pct:.3f}% bullish)")
+                    direction = None
 
-                # ── Consecutive loss guard ────────────────
-                if direction:
-                    recent_same_dir = [t for t in trades
-                                       if t.get("direction") == direction
-                                       and t.get("window_ts", 0) < window_ts
-                                       and t.get("window_ts", 0) >= window_ts - 900]
-                    if recent_same_dir:
-                        last_same = max(recent_same_dir, key=lambda t: t.get("window_ts", 0))
-                        if last_same.get("outcome") is None and time.time() > last_same["window_ts"] + 360:
-                            cl = last_same.get("chainlink_price", 0)
-                            base = last_same.get("price_to_beat", 0)
-                            if cl > 0 and base > 0:
-                                last_dir = last_same["direction"]
-                                won = (last_dir == "UP" and cl >= base) or (last_dir == "DOWN" and cl < base)
-                                last_same["outcome"] = "win" if won else "loss"
-                                last_same["resolve_price"] = cl
-                                safe_write_json(TRADES_PATH, trades)
-                        if last_same.get("outcome") == "loss":
-                            log_to_file(f"CONSECUTIVE LOSS BLOCK: {direction} skipped (last {direction} was a loss)")
-                            direction = None
+            # ── Best signal tracking ──────────────────────
+            if direction and signal_type not in ("DELTA_OVERRIDE", "ARB", "RESOLUTION_HUNT"):
+                tracked_priority = 999 if signal_type in ("DELTA_OVERRIDE", "ARB") else (priority or 0)
+                track_key = f"{direction}_{signal_type}"
+                existing = window_best_signal.get(track_key, {})
+                if tracked_priority > existing.get("priority", -1):
+                    window_best_signal[track_key] = {
+                        "direction": direction, "confidence": confidence,
+                        "signal_type": signal_type, "signals": signals,
+                        "priority": tracked_priority,
+                    }
 
-                # ── Momentum consistency guard ──────────
-                if direction:
-                    if direction == "UP" and delta_price < -50:
-                        log_to_file(f"MOMENTUM BLOCK: UP skipped (delta_price={delta_price:.1f} < -50)")
-                        direction = None
-                    elif direction == "DOWN" and delta_price > 50:
-                        log_to_file(f"MOMENTUM BLOCK: DOWN skipped (delta_price={delta_price:.1f} > 50)")
-                        direction = None
+            # ── Resolution Hunting (last 30s, extreme token prices) ──
+            if not direction and not already_traded and time_remaining <= 30 and module_enabled("resolution_hunting"):
+                res_hunt_dir = None
+                t3_thresh = strat("resolution_hunt_t3_threshold", 0.04)
+                t3_conf = strat("resolution_hunt_t3_confidence", 97)
+                t5_thresh = strat("resolution_hunt_t5_threshold", 0.04)
+                t5_conf = strat("resolution_hunt_t5_confidence", 95)
+                t10_thresh = strat("resolution_hunt_t10_threshold", 0.03)
+                t10_conf = strat("resolution_hunt_t10_confidence", 92)
+                t20_thresh = strat("resolution_hunt_t20_threshold", 0.05)
+                t20_conf = strat("resolution_hunt_t20_confidence", 90)
+                base_thresh = strat("resolution_hunt_base_threshold", 0.08)
+                base_conf = strat("resolution_hunt_base_confidence", 85)
+                if time_remaining <= 3:
+                    res_threshold, res_confidence = t3_thresh, t3_conf
+                elif time_remaining <= 5:
+                    res_threshold, res_confidence = t5_thresh, t5_conf
+                elif time_remaining <= 10:
+                    res_threshold, res_confidence = t10_thresh, t10_conf
+                elif time_remaining <= 20:
+                    res_threshold, res_confidence = t20_thresh, t20_conf
+                else:
+                    res_threshold, res_confidence = base_thresh, base_conf
+                if up_price <= res_threshold:
+                    res_hunt_dir = "UP"
+                elif down_price <= res_threshold:
+                    res_hunt_dir = "DOWN"
+                if res_hunt_dir:
+                    direction = res_hunt_dir
+                    confidence = res_confidence
+                    signal_type = "RESOLUTION_HUNT"
+                    risk_status = "OK"
+                    signals = {"signal_type": signal_type, "priority": 0, "phase": phase,
+                               "wall_ratio": round(wall_ratio, 2), "lag_score": round(lag_score, 2),
+                               "delta_price": round(delta_price, 2), "acceleration": round(acceleration, 2)}
+                    log_to_file(f"RESOLUTION HUNT: {direction} at ${up_price if direction=='UP' else down_price:.3f} (threshold=${res_threshold:.2f})", "INFO")
 
-                # ── Volatility guard ─────────────────────
-                if direction:
-                    vol_pct = calc_volatility()
-                    if vol_pct > 0.5:
-                        log_to_file(f"VOLATILITY BLOCK: {direction} skipped (spread={vol_pct:.2f}% > 0.5%)")
-                        direction = None
+            # ── T-5s Hard Deadline ──
+            if not direction and not already_traded and time_remaining <= 5 and window_best_signal and module_enabled("hard_deadline"):
+                best = max(window_best_signal.values(), key=lambda x: x["priority"])
+                log_to_file(f"HARD_DEADLINE: firing {best['direction']} via {best['signal_type']} (conf={best['confidence']:.0f}%)", "INFO")
+                direction = best["direction"]
+                confidence = best["confidence"]
+                signal_type = "HARD_DEADLINE"
+                signals = best["signals"]
+                risk_status = "OK"
 
-                # ── Trend bias filter ────────────────────
-                if direction:
-                    trend_pct = calc_trend_bias()
-                    if direction == "UP" and trend_pct < -0.15:
-                        log_to_file(f"TREND BLOCK: UP skipped (trend={trend_pct:.3f}% bearish)")
-                        direction = None
-                    elif direction == "DOWN" and trend_pct > 0.15:
-                        log_to_file(f"TREND BLOCK: DOWN skipped (trend={trend_pct:.3f}% bullish)")
-                        direction = None
-
-                # ── Resolution Hunting (last 30s, extreme token prices) ──
-                if not direction and not already_traded and time_remaining <= 30:
-                    res_hunt_dir = None
-                    if up_price <= 0.08:
-                        res_hunt_dir = "UP"
-                    elif down_price <= 0.08:
-                        res_hunt_dir = "DOWN"
-                    if res_hunt_dir:
-                        direction = res_hunt_dir
-                        confidence = 90
-                        signal_type = "RESOLUTION_HUNT"
-                        signals = {"signal_type": signal_type, "priority": 0, "phase": phase,
-                                   "wall_ratio": round(wall_ratio, 2), "lag_score": round(lag_score, 2),
-                                   "delta_price": round(delta_price, 2), "acceleration": round(acceleration, 2)}
-                        log_to_file(f"RESOLUTION HUNT: {direction} at token ${up_price if direction=='UP' else down_price:.3f}", "INFO")
-
-                # ── Execute Trade ────────────────────────
-                if direction and risk_status == "OK" and not already_traded:
-                    min_conf = float(cfg.get("min_confidence", 70))
-                    if confidence < min_conf and signal_type != "ARB" and signal_type != "RESOLUTION_HUNT":
-                        direction = None
+            # ── Execute Trade ────────────────────────
+            if direction and risk_status == "OK" and not already_traded:
+                min_conf = float(cfg.get("min_confidence", 70))
+                if confidence < min_conf and signal_type not in ("ARB", "RESOLUTION_HUNT", "DELTA_OVERRIDE", "HARD_DEADLINE"):
+                    direction = None
+                    with strategy_lock:
+                        current_strategy_info["status"] = f"Low conf ({confidence:.0f}% < {min_conf:.0f}%)"
+                elif signal_type == "ARB":
+                    clob_ids = market.get("clobTokenIds", "[]")
+                    if isinstance(clob_ids, str):
+                        try:
+                            clob_ids = json.loads(clob_ids)
+                        except:
+                            clob_ids = []
+                    tokens_list = market.get("tokens", [])
+                    up_token_id = (clob_ids[0] if len(clob_ids) > 0
+                                   else (tokens_list[0].get("tokenId") if tokens_list else None))
+                    down_token_id = (clob_ids[1] if len(clob_ids) > 1
+                                     else (tokens_list[1].get("tokenId") if len(tokens_list) > 1 else None))
+                    # Pick the cheaper side (single directional bet, not both)
+                    arb_side = "DOWN" if up_price >= down_price else "UP"
+                    arb_token_id = down_token_id if up_price >= down_price else up_token_id
+                    arb_price = down_price if up_price >= down_price else up_price
+                    log_to_file(f"ARB: Single bet on {arb_side} @ ${arb_price:.4f} (cheaper side)", "INFO")
+                    if arb_token_id:
+                        direction = arb_side
+                        execute_trade(
+                            arb_side, arb_token_id, arb_price, price_now,
+                            slug, window_ts, 100, signals, cfg, client, market, price_to_beat
+                        )
+                else:
+                    target_price = up_price if direction == "UP" else down_price
+                    if signal_type not in ("ARB", "RESOLUTION_HUNT", "DELTA_OVERRIDE") and guard_enabled("fee_aware_gate") and not fee_aware_gate(direction, confidence, target_price):
+                        fee_buffer = strat("fee_buffer_pp", 5)
+                        log_to_file(f"FEE_BLOCK: {direction} at ${target_price:.3f} (conf={confidence:.0f}%, BE={target_price*100:.0f}%+{fee_buffer}pp)")
                         with strategy_lock:
-                            current_strategy_info["status"] = f"Low conf ({confidence:.0f}% < {min_conf:.0f}%)"
-                    elif signal_type == "ARB":
-                        clob_ids = market.get("clobTokenIds", "[]")
-                        if isinstance(clob_ids, str):
-                            try:
-                                clob_ids = json.loads(clob_ids)
-                            except:
-                                clob_ids = []
-                        tokens_list = market.get("tokens", [])
-                        up_token_id = (clob_ids[0] if len(clob_ids) > 0
-                                       else (tokens_list[0].get("tokenId") if tokens_list else None))
-                        down_token_id = (clob_ids[1] if len(clob_ids) > 1
-                                         else (tokens_list[1].get("tokenId") if len(tokens_list) > 1 else None))
-                        # Pick the cheaper side (single directional bet, not both)
-                        arb_side = "DOWN" if up_price >= down_price else "UP"
-                        arb_token_id = down_token_id if up_price >= down_price else up_token_id
-                        arb_price = down_price if up_price >= down_price else up_price
-                        log_to_file(f"ARB: Single bet on {arb_side} @ ${arb_price:.4f} (cheaper side)", "INFO")
-                        if arb_token_id:
-                            direction = arb_side
-                            execute_trade(
-                                arb_side, arb_token_id, arb_price, price_now,
-                                slug, window_ts, 100, signals, cfg, client, market, price_to_beat
-                            )
+                            current_strategy_info["status"] = f"Fee gate: ${target_price:.3f} too expensive"
+                        direction = None
                     else:
                         clob_ids = market.get("clobTokenIds", "[]")
                         if isinstance(clob_ids, str):
@@ -1428,50 +1915,53 @@ def bot_loop():
                         down_token_id = (clob_ids[1] if len(clob_ids) > 1
                                          else (tokens_list[1].get("tokenId") if len(tokens_list) > 1 else None))
                         target_token_id = up_token_id if direction == "UP" else down_token_id
-                        target_price = up_price if direction == "UP" else down_price
 
-                        if 0.48 < target_price < 0.52:
+                    if guard_enabled("edge_block"):
+                        edge_low = strat("edge_token_mid_low", 0.47)
+                        edge_high = strat("edge_token_mid_high", 0.53)
+                        if edge_low < target_price < edge_high:
                             log_to_file(f"EDGE BLOCK: {direction} at ${target_price:.3f} too close to 0.50")
                             with strategy_lock:
                                 current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
                             direction = None
-                        else:
-                            edge_pct = abs(target_price - 0.50) * 100
-                            log_to_file(f"EDGE: {direction} at ${target_price:.3f} ({edge_pct:.0f}% skew)", "INFO")
+                    if direction:
+                        edge_pct = abs(target_price - 0.50) * 100
+                        log_to_file(f"EDGE: {direction} at ${target_price:.3f} ({edge_pct:.0f}% skew)", "INFO")
 
-                        one_hour = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-                        recent_trades = [t for t in trades if t.get("timestamp", "") > one_hour]
-                        max_hour = cfg.get("max_trades_per_hour", 12)
+                    one_hour = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+                    recent_trades = [t for t in trades if t.get("timestamp", "") > one_hour]
+                    max_hour = cfg.get("max_trades_per_hour", 12)
 
-                        if not direction:
-                            with strategy_lock:
-                                current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
-                        elif len(recent_trades) >= max_hour:
-                            with strategy_lock:
-                                current_strategy_info["status"] = f"Hourly limit ({len(recent_trades)}/{max_hour})"
-                        elif not target_token_id:
-                            with strategy_lock:
-                                current_strategy_info["status"] = "No token ID found"
-                        elif not client and not cfg.get("dry_run", True):
-                            with strategy_lock:
-                                current_strategy_info["status"] = "Waiting for live client..."
-                        else:
-                            with strategy_lock:
-                                current_strategy_info["status"] = (
-                                    f"ENTERING: {direction} conf={confidence:.1f}% | "
-                                    f"type={signal_type} | token=${target_price:.3f} | "
-                                    f"{time_remaining}s left"
-                                )
-                            log_to_file(
-                                f"TRADE ENTRY: {direction} conf={confidence:.1f}% | "
-                                f"type={signal_type} | BTC ${price_now:.2f} vs strike ${price_to_beat:.2f} | "
-                                f"token=${target_price:.3f} | {time_remaining}s remaining"
+                    if not direction:
+                        with strategy_lock:
+                            current_strategy_info["status"] = f"No edge at ${target_price:.3f}"
+                    elif len(recent_trades) >= max_hour:
+                        with strategy_lock:
+                            current_strategy_info["status"] = f"Hourly limit ({len(recent_trades)}/{max_hour})"
+                    elif not target_token_id:
+                        with strategy_lock:
+                            current_strategy_info["status"] = "No token ID found"
+                    elif not client and not cfg.get("dry_run", True):
+                        with strategy_lock:
+                            current_strategy_info["status"] = "Waiting for live client..."
+                    else:
+                        with strategy_lock:
+                            current_strategy_info["status"] = (
+                                f"ENTERING: {direction} conf={confidence:.1f}% | "
+                                f"type={signal_type} | token=${target_price:.3f} | "
+                                f"{time_remaining}s left"
                             )
-                            execute_trade(
-                                direction, target_token_id, target_price, price_now,
-                                slug, window_ts, confidence, signals, cfg, client, market, price_to_beat
-                            )
-                else:
+                        log_to_file(
+                            f"TRADE ENTRY: {direction} conf={confidence:.1f}% | "
+                            f"type={signal_type} | BTC ${price_now:.2f} vs strike ${price_to_beat:.2f} | "
+                            f"token=${target_price:.3f} | {time_remaining}s remaining"
+                        )
+                        execute_trade(
+                            direction, target_token_id, target_price, price_now,
+                            slug, window_ts, confidence, signals, cfg, client, market, price_to_beat
+                        )
+                        update_signal_guard(direction)
+            else:
                     reasons = []
                     if not direction:
                         reasons.append(f"no_signal ({signal_type})")
@@ -1480,9 +1970,13 @@ def bot_loop():
                     with strategy_lock:
                         current_strategy_info["status"] = f"Analyzing... ({'; '.join(reasons) or 'ok'})"
 
-            if len(market_baselines) > 20:
-                cutoff = window_ts - 3600
+            max_baselines = strat("max_daily_market_baselines", 20)
+            baseline_prune = strat("baseline_prune_window", 3600)
+            if len(market_baselines) > max_baselines:
+                cutoff = window_ts - baseline_prune
                 market_baselines = {k: v for k, v in market_baselines.items() if k > cutoff}
+                _traded_windows.difference_update({k for k in _traded_windows if k < cutoff})
+                _failed_window_attempts = {k: v for k, v in _failed_window_attempts.items() if k >= cutoff}
 
             time.sleep(1)
         except Exception as e:
@@ -1558,7 +2052,7 @@ def get_status():
             "oracle_alignment": "ACTIVE" if cl_px > 0 else "INACTIVE",
             "entry_timing": f"Phase {phase}",
             "order_book": "ACTIVE" if len(ob_bids) > 0 else "INACTIVE",
-            "arb_hedge": "ACTIVE",
+            "arb_hedge": "ACTIVE" if module_enabled("arb_hedge") else "DISABLED",
             "risk_management": "ACTIVE" if risk_manager and risk_manager.enabled else "DISABLED",
             "execution": "LIVE" if not cfg.get("dry_run", True) else "DRY_RUN",
         }
@@ -1768,9 +2262,26 @@ def handle_config():
                     "status": "blocked",
                     "message": "Set '_confirm_live': true to switch from dry_run to live trading"
                 }), 403
-        safe_write_json(CONFIG_PATH, data)
+        # Deep merge so dashboard saves don't erase manually set keys
+        old_cfg.update({k: v for k, v in data.items() if k not in ("risk_management", "strategy", "modules", "guards")})
+        for section in ("risk_management", "strategy", "modules", "guards"):
+            if section in data and isinstance(data[section], dict):
+                old_sec = old_cfg.get(section, {})
+                if isinstance(old_sec, dict):
+                    old_sec.update(data[section])
+                    old_cfg[section] = old_sec
+        safe_write_json(CONFIG_PATH, old_cfg)
         return jsonify({"status": "saved"})
-    return jsonify(safe_read_json(CONFIG_PATH) or {})
+    cfg = safe_read_json(CONFIG_PATH) or {}
+    defaults = {
+        "strategy": {},
+        "modules": {},
+        "guards": {},
+    }
+    for key, val in defaults.items():
+        if key not in cfg:
+            cfg[key] = val
+    return jsonify(cfg)
 
 @app.route("/clear-trades", methods=["POST"])
 @require_api_key
@@ -1809,6 +2320,83 @@ def get_logs():
         return jsonify({"logs": [l.strip() for l in lines[-200:]]})
     except:
         return jsonify({"logs": []})
+
+# ── API Credentials Endpoint ────────────────────────────
+@app.route("/env", methods=["GET", "POST"])
+@require_api_key
+def manage_env():
+    if request.method == "GET":
+        env_vars = {}
+        if ENV_PATH.exists():
+            with open(ENV_PATH, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k in ("POLY_PRIVATE_KEY", "POLY_API_SECRET") and v:
+                            v = v[:6] + "..." + v[-4:] if len(v) > 12 else "***"
+                        env_vars[k] = v
+        defaults = {
+            "POLY_PRIVATE_KEY": "",
+            "POLY_WALLET_ADDRESS": "",
+            "RELAYER_API_KEY_ADDRESS": "",
+            "POLY_API_KEY": "",
+            "POLY_API_SECRET": "",
+            "POLY_API_PASSPHRASE": "",
+            "POLYGON_RPC": "https://polygon.drpc.org",
+            "POLY_SIGNATURE_TYPE": "1",
+            "POLY_DEPOSIT_WALLET_ADDRESS": "",
+            "POLY_RTDS_WS_URL": "",
+            "POLYBOT_API_KEY": "",
+            "POLYBOT_LOG_LEVEL": "INFO",
+        }
+        for k, v in defaults.items():
+            env_vars.setdefault(k, v)
+        return jsonify(env_vars)
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "message": "No data provided"}), 400
+
+    import re
+    updated_keys = set()
+    if ENV_PATH.exists():
+        with open(ENV_PATH, "r") as f:
+            lines = f.readlines()
+    else:
+        lines = []
+
+    new_lines = []
+    seen = {}
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            seen[k] = True
+            if k in data:
+                val = str(data[k]).strip()
+                if k in ("POLY_PRIVATE_KEY", "POLY_API_SECRET", "POLY_API_PASSPHRASE", "POLYBOT_API_KEY"):
+                    val = '"' + val + '"'
+                new_lines.append(f"{k}={val}\n".replace("='", "=\"").replace("'\"", "\"\""))
+                updated_keys.add(k)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+
+    for k, v in data.items():
+        if k not in seen and v:
+            val = str(v).strip()
+            if k in ("POLY_PRIVATE_KEY", "POLY_API_SECRET", "POLY_API_PASSPHRASE", "POLYBOT_API_KEY"):
+                val = '"' + val + '"'
+            new_lines.append(f"{k}={val}\n")
+            updated_keys.add(k)
+
+    ENV_PATH.write_text("".join(new_lines), encoding="utf-8")
+    load_dotenv(ENV_PATH, override=True)
+    return jsonify({"status": "ok", "updated": list(updated_keys)})
 
 # ── WebSocket Clients ────────────────────────────────────
 ws_client = BinanceWS()

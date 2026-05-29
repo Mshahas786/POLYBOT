@@ -110,7 +110,7 @@ export function render(data) {
   // Signal
   const dir = sigs.signal_type && sigs.signal_type !== 'NONE' ? sigs.signal_type : 'NONE'
   $('sigType').textContent = dir
-  const sigColors = { CORE_SNIPER: 'g', ARB: 'b', WALL_BIAS: 'y', WALL_MOMENTUM: 'g', MOMENTUM_ONLY: 'y', ORACLE_LAG: 'b', MEAN_REVERSION: 'purple', NONE: 'r' }
+  const sigColors = { CORE_SNIPER: 'g', ARB: 'b', WALL_BIAS: 'y', WALL_MOMENTUM: 'g', MOMENTUM_ONLY: 'y', ORACLE_LAG: 'b', MEAN_REVERSION: 'purple', VOL_EDGE: 'b', NONE: 'r' }
   const sc = sigColors[dir] || 'b'
   const badgeMap = { g: 'bg-green/12 text-green border-green/20', b: 'bg-blue/12 text-blue border-blue/20', y: 'bg-accent/12 text-accent border-accent/20', r: 'bg-red/12 text-red border-red/20', purple: 'bg-purple/12 text-purple border-purple/20' }
   $('sigType').className = 'text-[7px] px-2 py-[3px] rounded font-mono font-semibold border ' + (badgeMap[sc] || badgeMap.b)
@@ -144,6 +144,11 @@ export function render(data) {
   if (sigs.bayes_mod !== undefined) parts.push('Bayes: <strong style="color:' + (sigs.bayes_mod >= 0 ? 'var(--color-green)' : 'var(--color-red)') + '">' + (sigs.bayes_mod > 0 ? '+' : '') + sigs.bayes_mod + '</strong>')
   if (info.volatility_pct !== undefined) parts.push('Vol: <strong style="color:' + (info.volatility_pct > 0.5 ? 'var(--color-red)' : info.volatility_pct > 0.3 ? 'var(--color-accent)' : 'var(--color-green)') + '">' + info.volatility_pct.toFixed(2) + '%</strong>')
   if (info.trend_pct !== undefined) parts.push('Trend: <strong style="color:' + (info.trend_pct > 0.15 ? 'var(--color-green)' : info.trend_pct < -0.15 ? 'var(--color-red)' : 'var(--color-text2)') + '">' + (info.trend_pct > 0 ? '+' : '') + info.trend_pct.toFixed(3) + '%</strong>')
+  if (sigs.fair_prob !== undefined) parts.push('Fair: <strong>' + (sigs.fair_prob * 100).toFixed(1) + '%</strong>')
+  if (sigs.market_prob !== undefined) parts.push('Market: <strong>' + (sigs.market_prob * 100).toFixed(1) + '%</strong>')
+  if (sigs.edge !== undefined) parts.push('Edge: <strong style="color:var(--color-green)">+' + (sigs.edge * 100).toFixed(1) + '%</strong>')
+  if (sigs.period_vol !== undefined) parts.push('PerVol: <strong>' + (sigs.period_vol * 100).toFixed(2) + '%</strong>')
+  if (sigs.max_edge !== undefined) parts.push('MaxEdge: <strong>' + (sigs.max_edge * 100).toFixed(1) + '%</strong>')
   metaEl.innerHTML = parts.join(' &middot; ')
 
   // Performance
@@ -344,44 +349,193 @@ export async function fetchLogs() {
 export async function loadConfig() {
   try {
     const c = await api.getConfig()
-    if (!c) return
+    if (!c) {
+      toast('Failed to load config — API returned empty', 'err')
+      return
+    }
+    const dry = c.dry_run !== false
+    $('toggleDry').className = 'toggle-switch' + (dry ? ' toggle-on' : '')
+    $('liveWarn').classList.toggle('hidden', dry)
     $('sBetSize').value = c.bet_size || 1
-    $('sMaxTrades').value = c.max_trades_per_hour || 6
-    $('sMinConf').value = c.min_confidence || 75
+    $('sMaxBet').value = c.max_bet || 3
+    $('sMaxTrades').value = c.max_trades_per_hour || 12
+    $('sMinConf').value = c.min_confidence || 80
     const rm = c.risk_management || {}
-    $('sDailyLoss').value = rm.daily_loss_limit_usdc || 8
-    $('sMaxLossStreak').value = rm.max_consecutive_losses || 3
+    $('sDailyLoss').value = rm.daily_loss_limit_usdc || 6
+    $('sHourlyLoss').value = rm.hourly_loss_pct || 5
+    $('sMaxLossStreak').value = rm.max_consecutive_losses || 4
     $('sMaxDD').value = rm.max_drawdown_pct || 10
-    $('sCooldown').value = rm.cooldown_after_loss_seconds || 180
+    $('sMaxConcurrent').value = rm.max_concurrent_positions || 3
+    $('sCooldown').value = rm.cooldown_after_loss_seconds || 300
+    $('sHourlyCooldown').value = rm.cooldown_after_hourly_loss_seconds || 3600
+    $('sStaleFeed').value = rm.stale_feed_seconds || 60
+    $('sBaseBetPct').value = rm.base_bet_pct || 1
+    $('sHighConfBetPct').value = rm.high_conf_bet_pct || 2
+    $('sArbBetPct').value = rm.arb_bet_pct || 5
     const kelly = rm.use_kelly_sizing || false
     $('toggleKelly').className = 'toggle-switch' + (kelly ? ' toggle-on' : '')
-  } catch (e) { /* silent */ }
+    $('sKellyFrac').value = rm.kelly_fraction || 0.3
+    $('sInitBankroll').value = rm.initial_bankroll || 100
+    $('sMaxTokenPrice').value = rm.max_token_price || 0.92
+    $('sToxicLag').value = rm.toxic_lag_threshold || 1.0
+    $('sEdgeLagMax').value = rm.edge_lag_max || 1.5
+    $('sEdgeLagMin').value = rm.edge_lag_min || 0.3
+    $('sWinRateLb').value = rm.auto_stop_win_rate_lookback_trades || 20
+    $('sWinRateThresh').value = rm.auto_stop_win_rate_threshold || 45
+    $('sClFallbackInt').value = c.strategy?.chainlink_fallback_interval || 10
+    $('sOutcomeInt').value = c.strategy?.outcome_check_interval || 120
+    $('sMarketInt').value = c.strategy?.market_fetch_interval || 30
+    $('sBalanceInt').value = c.strategy?.balance_fetch_interval || 30
+    $('sSigCheckInt').value = c.strategy?.signal_check_interval || 10
+    // Strategy tuning
+    const sk = c.strategy || {}
+    $('sWallUp').value = sk.wall_ratio_up_threshold || 2.5
+    $('sWallDown').value = sk.wall_ratio_down_threshold || 0.4
+    $('sWallMax').value = sk.wall_ratio_max || 5.0
+    $('sMomStrong').value = sk.momentum_delta_strengthening || 50
+    $('sMomMod').value = sk.momentum_delta_moderate || 25
+    $('sMomBlock').value = sk.momentum_block_delta || 20
+    $('sMomOppCap').value = sk.momentum_opposition_cap || 65
+    $('sLatMove').value = sk.latency_arb_move_pct || 0.3
+    $('sLatToken').value = sk.latency_arb_max_token_price || 0.70
+    $('sWdDelta').value = sk.window_delta_min_delta_pct || 0.2
+    $('sWdToken').value = sk.window_delta_max_token_price || 0.70
+    $('sWdTimeMax').value = sk.window_delta_time_max || 50
+    $('sWdTimeMin').value = sk.window_delta_time_min || 10
+    $('sCsThresh').value = sk.cheap_side_threshold || 0.85
+    $('sVolThresh').value = sk.vol_edge_threshold || 0.05
+    $('sArbThresh').value = sk.arb_threshold || 0.985
+    $('sHedgeThresh').value = sk.hedge_threshold || 0.99
+    $('sBayesMin').value = sk.bayesian_min_trades || 3
+    $('sBayesBoostHigh').value = sk.bayesian_boost_high_amt || 5
+    $('sBayesBoostLow').value = sk.bayesian_boost_low_amt || 3
+    $('sBayesPenHigh').value = sk.bayesian_penalty_high_amt || -10
+    $('sBayesPenLow').value = sk.bayesian_penalty_low_amt || -5
+    $('sResT3').value = sk.resolution_hunt_t3_threshold || 0.04
+    $('sResT5').value = sk.resolution_hunt_t5_threshold || 0.04
+    $('sResT10').value = sk.resolution_hunt_t10_threshold || 0.03
+    $('sResT20').value = sk.resolution_hunt_t20_threshold || 0.05
+    $('sResBase').value = sk.resolution_hunt_base_threshold || 0.08
+    $('sPhase1').value = sk.phase1_min_seconds || 250
+    $('sPhase2').value = sk.phase2_min_seconds || 100
+    $('sPhase3').value = sk.phase3_min_seconds || 30
+    $('sPhase4').value = sk.phase4_min_seconds || 5
+    $('sSigGuardCD').value = sk.signal_guard_cooldown || 120
+    $('sTrendThresh').value = sk.trend_bias_threshold || 0.15
+    $('sFeeBuf').value = sk.fee_buffer_pp || 5
+    $('sVolBlock').value = sk.volatility_block_spread_pct || 0.5
+    $('sVolRatio').value = sk.volume_ratio_threshold || 0.5
+    $('sEdgeMidLow').value = sk.edge_token_mid_low || 0.47
+    $('sEdgeMidHigh').value = sk.edge_token_mid_high || 0.53
+    $('sPriceMarkup').value = sk.order_price_markup || 1.05
+    $('sMaxOrdPrice').value = sk.max_order_price || 0.99
+    $('sTrendPen').value = sk.trend_mismatch_penalty || 15
+    $('sTrendBonus').value = sk.trend_match_bonus || 5
+    // Modules
+    const mods = c.modules || {}
+    const modIds = { modSignalArb: 'signal_arb', modDeltaOverride: 'signal_delta_override', modLatencyArb: 'signal_latency_arb', modWindowDelta: 'signal_window_delta', modCheapSide: 'signal_cheap_side', modVolEdge: 'signal_vol_edge', modWallMomentum: 'signal_wall_momentum', modWallBias: 'signal_wall_bias', modOracleLag: 'signal_oracle_lag', modMomentumOnly: 'signal_momentum_only', modMeanReversion: 'signal_mean_reversion', modResolutionHunt: 'resolution_hunting', modHardDeadline: 'hard_deadline', modArbHedge: 'arb_hedge' }
+    for (const [id, key] of Object.entries(modIds)) {
+      const el = $(id)
+      if (el) el.className = 'toggle-switch' + (mods[key] !== false ? ' toggle-on' : '')
+    }
+    // Guards
+    const guards = c.guards || {}
+    const guardIds = { guardMomentum: 'momentum_consistency', guardVolatility: 'volatility_guard', guardVolume: 'volume_confirmation', guardTrend: 'trend_bias_filter', guardConsecutive: 'consecutive_loss_guard', guardStaleFeed: 'stale_feed_guard', guardSignal: 'signal_guard', guardFee: 'fee_aware_gate', guardEdge: 'edge_block' }
+    for (const [id, key] of Object.entries(guardIds)) {
+      const el = $(id)
+      if (el) el.className = 'toggle-switch' + (guards[key] !== false ? ' toggle-on' : '')
+    }
+  } catch (e) {
+    toast('Failed to load config: ' + e.message, 'err')
+  }
 }
 
 // ── Settings Save ──
 export async function saveSettings() {
   const dry = $('toggleDry').classList.contains('toggle-on')
+  const modIds = { modSignalArb: 'signal_arb', modDeltaOverride: 'signal_delta_override', modLatencyArb: 'signal_latency_arb', modWindowDelta: 'signal_window_delta', modCheapSide: 'signal_cheap_side', modVolEdge: 'signal_vol_edge', modWallMomentum: 'signal_wall_momentum', modWallBias: 'signal_wall_bias', modOracleLag: 'signal_oracle_lag', modMomentumOnly: 'signal_momentum_only', modMeanReversion: 'signal_mean_reversion', modResolutionHunt: 'resolution_hunting', modHardDeadline: 'hard_deadline', modArbHedge: 'arb_hedge' }
+  const guardIds = { guardMomentum: 'momentum_consistency', guardVolatility: 'volatility_guard', guardVolume: 'volume_confirmation', guardTrend: 'trend_bias_filter', guardConsecutive: 'consecutive_loss_guard', guardStaleFeed: 'stale_feed_guard', guardSignal: 'signal_guard', guardFee: 'fee_aware_gate', guardEdge: 'edge_block' }
   const cfg = {
     dry_run: dry,
     bet_size: parseFloat($('sBetSize').value) || 1,
-    max_trades_per_hour: parseInt($('sMaxTrades').value) || 6,
-    min_confidence: parseInt($('sMinConf').value) || 75,
+    max_bet: parseFloat($('sMaxBet').value) || 3,
+    max_trades_per_hour: parseInt($('sMaxTrades').value) || 12,
+    min_confidence: parseInt($('sMinConf').value) || 80,
     _confirm_live: !dry,
     risk_management: {
       enabled: true,
-      daily_loss_limit_usdc: parseFloat($('sDailyLoss').value) || 8,
-      max_consecutive_losses: parseInt($('sMaxLossStreak').value) || 3,
+      daily_loss_limit_usdc: parseFloat($('sDailyLoss').value) || 6,
+      hourly_loss_pct: parseFloat($('sHourlyLoss').value) || 5,
+      max_consecutive_losses: parseInt($('sMaxLossStreak').value) || 4,
       max_drawdown_pct: parseFloat($('sMaxDD').value) || 10,
-      max_token_price: 0.92,
-      initial_bankroll: 100,
-      base_bet_pct: 1.0,
-      high_conf_bet_pct: 2.0,
-      cooldown_after_loss_seconds: parseInt($('sCooldown').value) || 180,
-      stale_feed_seconds: 60,
-      toxic_lag_threshold: 1.0,
+      max_concurrent_positions: parseInt($('sMaxConcurrent').value) || 3,
+      cooldown_after_loss_seconds: parseInt($('sCooldown').value) || 300,
+      cooldown_after_hourly_loss_seconds: parseInt($('sHourlyCooldown').value) || 3600,
+      stale_feed_seconds: parseInt($('sStaleFeed').value) || 60,
+      base_bet_pct: parseFloat($('sBaseBetPct').value) || 1,
+      high_conf_bet_pct: parseFloat($('sHighConfBetPct').value) || 2,
+      arb_bet_pct: parseFloat($('sArbBetPct').value) || 5,
       use_kelly_sizing: $('toggleKelly').classList.contains('toggle-on'),
-      kelly_fraction: 0.3,
+      kelly_fraction: parseFloat($('sKellyFrac').value) || 0.3,
+      initial_bankroll: parseFloat($('sInitBankroll').value) || 100,
+      max_token_price: parseFloat($('sMaxTokenPrice').value) || 0.92,
+      toxic_lag_threshold: parseFloat($('sToxicLag').value) || 1.0,
+      edge_lag_max: parseFloat($('sEdgeLagMax').value) || 1.5,
+      edge_lag_min: parseFloat($('sEdgeLagMin').value) || 0.3,
+      auto_stop_win_rate_lookback_trades: parseInt($('sWinRateLb').value) || 20,
+      auto_stop_win_rate_threshold: parseFloat($('sWinRateThresh').value) || 45,
     },
+    strategy: {
+      chainlink_fallback_interval: parseInt($('sClFallbackInt').value) || 10,
+      outcome_check_interval: parseInt($('sOutcomeInt').value) || 120,
+      market_fetch_interval: parseInt($('sMarketInt').value) || 30,
+      balance_fetch_interval: parseInt($('sBalanceInt').value) || 30,
+      signal_check_interval: parseInt($('sSigCheckInt').value) || 10,
+      wall_ratio_up_threshold: parseFloat($('sWallUp').value) || 2.5,
+      wall_ratio_down_threshold: parseFloat($('sWallDown').value) || 0.4,
+      wall_ratio_max: parseFloat($('sWallMax').value) || 5.0,
+      momentum_delta_strengthening: parseFloat($('sMomStrong').value) || 50,
+      momentum_delta_moderate: parseFloat($('sMomMod').value) || 25,
+      momentum_block_delta: parseFloat($('sMomBlock').value) || 20,
+      momentum_opposition_cap: parseFloat($('sMomOppCap').value) || 65,
+      latency_arb_move_pct: parseFloat($('sLatMove').value) || 0.3,
+      latency_arb_max_token_price: parseFloat($('sLatToken').value) || 0.70,
+      window_delta_min_delta_pct: parseFloat($('sWdDelta').value) || 0.2,
+      window_delta_max_token_price: parseFloat($('sWdToken').value) || 0.70,
+      window_delta_time_max: parseInt($('sWdTimeMax').value) || 50,
+      window_delta_time_min: parseInt($('sWdTimeMin').value) || 10,
+      cheap_side_threshold: parseFloat($('sCsThresh').value) || 0.85,
+      vol_edge_threshold: parseFloat($('sVolThresh').value) || 0.05,
+      arb_threshold: parseFloat($('sArbThresh').value) || 0.985,
+      hedge_threshold: parseFloat($('sHedgeThresh').value) || 0.99,
+      bayesian_min_trades: parseInt($('sBayesMin').value) || 3,
+      bayesian_boost_high_amt: parseInt($('sBayesBoostHigh').value) || 5,
+      bayesian_boost_low_amt: parseInt($('sBayesBoostLow').value) || 3,
+      bayesian_penalty_high_amt: parseInt($('sBayesPenHigh').value) || -10,
+      bayesian_penalty_low_amt: parseInt($('sBayesPenLow').value) || -5,
+      resolution_hunt_t3_threshold: parseFloat($('sResT3').value) || 0.04,
+      resolution_hunt_t5_threshold: parseFloat($('sResT5').value) || 0.04,
+      resolution_hunt_t10_threshold: parseFloat($('sResT10').value) || 0.03,
+      resolution_hunt_t20_threshold: parseFloat($('sResT20').value) || 0.05,
+      resolution_hunt_base_threshold: parseFloat($('sResBase').value) || 0.08,
+      phase1_min_seconds: parseInt($('sPhase1').value) || 250,
+      phase2_min_seconds: parseInt($('sPhase2').value) || 100,
+      phase3_min_seconds: parseInt($('sPhase3').value) || 30,
+      phase4_min_seconds: parseInt($('sPhase4').value) || 5,
+      signal_guard_cooldown: parseInt($('sSigGuardCD').value) || 120,
+      trend_bias_threshold: parseFloat($('sTrendThresh').value) || 0.15,
+      fee_buffer_pp: parseInt($('sFeeBuf').value) || 5,
+      volatility_block_spread_pct: parseFloat($('sVolBlock').value) || 0.5,
+      volume_ratio_threshold: parseFloat($('sVolRatio').value) || 0.5,
+      edge_token_mid_low: parseFloat($('sEdgeMidLow').value) || 0.47,
+      edge_token_mid_high: parseFloat($('sEdgeMidHigh').value) || 0.53,
+      order_price_markup: parseFloat($('sPriceMarkup').value) || 1.05,
+      max_order_price: parseFloat($('sMaxOrdPrice').value) || 0.99,
+      trend_mismatch_penalty: parseInt($('sTrendPen').value) || 15,
+      trend_match_bonus: parseInt($('sTrendBonus').value) || 5,
+    },
+    modules: Object.fromEntries(Object.entries(modIds).map(([id, key]) => [key, $(id)?.classList.contains('toggle-on') ?? true])),
+    guards: Object.fromEntries(Object.entries(guardIds).map(([id, key]) => [key, $(id)?.classList.contains('toggle-on') ?? true])),
   }
   try {
     const d = await api.saveConfig(cfg)
@@ -457,6 +611,16 @@ window.toggleDry = function () {
 
 window.toggleKelly = function () {
   $('toggleKelly').classList.toggle('toggle-on')
+}
+
+window.toggleMod = function (id) {
+  const el = $(id)
+  if (el) el.classList.toggle('toggle-on')
+}
+
+window.toggleGuard = function (id) {
+  const el = $(id)
+  if (el) el.classList.toggle('toggle-on')
 }
 
 window.saveSettings = saveSettings

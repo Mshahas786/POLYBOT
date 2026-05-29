@@ -1,235 +1,604 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-bg">
+<html lang="en" class="h-dvh overflow-hidden">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>PolyBot Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
-<body class="font-sans">
+<body class="h-dvh overflow-hidden font-sans">
 
-<div class="max-w-[900px] mx-auto px-4 py-3" id="app">
+<div id="app" class="flex h-dvh bg-bg text-text font-sans">
 
-  <!-- Header -->
-  <header class="flex items-center justify-between mb-3 flex-wrap gap-1.5" id="appHeader">
-    <h1 class="font-mono text-[15px] font-semibold text-accent flex items-center gap-2">
-      POLYBOT <small class="text-text2 text-[9px] font-normal" id="ver">v6.0</small>
-    </h1>
-    <div class="flex items-center gap-2 flex-wrap">
-      <span id="statusDotEl"><span class="inline-block w-[7px] h-[7px] rounded-full bg-red shadow-[0_0_7px_rgba(255,71,87,0.5)]"></span></span>
-      <span id="modeBadge" class="text-[9px] px-2 py-[3px] rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
-      <span id="engineState" class="font-mono text-[10px] text-red">STOPPED</span>
-      <span id="timeDisplay" class="font-mono text-[9px] text-muted"></span>
-    </div>
-  </header>
-
-  <!-- Tabs -->
-  <nav class="flex gap-[3px] mb-2.5 border-b border-border">
-    <button class="tab-active tab-btn" data-tab="main">Dashboard</button>
-    <button class="tab-btn" data-tab="trades">Trades</button>
-    <button class="tab-btn" data-tab="bayesian">Bayesian</button>
-    <button class="tab-btn" data-tab="logs">Logs</button>
-    <button class="tab-btn" data-tab="settings">Settings</button>
-  </nav>
-
-  <!-- ===== DASHBOARD TAB ===== -->
-  <section id="tab-main" class="tab-panel">
-    <!-- Price Grid -->
-    <div class="grid grid-cols-3 gap-1.5 mb-2">
-      <div class="bg-surface2 rounded-lg p-2.5 text-center border border-border">
-        <div class="text-[8px] font-mono text-muted uppercase tracking-wider">BTC/USDT</div>
-        <div class="font-mono text-xl font-bold mt-0.5 text-green" id="btcPrice">--</div>
-        <div class="font-mono text-[9px] text-text2 mt-px" id="btcDelta">--</div>
-      </div>
-      <div class="bg-surface2 rounded-lg p-2.5 text-center border border-border">
-        <div class="text-[8px] font-mono text-muted uppercase tracking-wider">CHAINLINK</div>
-        <div class="font-mono text-xl font-bold mt-0.5 text-text2" id="chainlinkPrice">--</div>
-        <div class="font-mono text-[9px] text-text2 mt-px" id="clLag">--</div>
-      </div>
-      <div class="bg-surface2 rounded-lg p-2.5 text-center border border-border">
-        <div class="text-[8px] font-mono text-muted uppercase tracking-wider">POLYMARKET</div>
-        <div class="font-mono text-base font-bold mt-0.5 text-accent" id="polyMarket">--</div>
-        <div class="font-mono text-[9px] text-text2 mt-px" id="polyTokens">--</div>
-      </div>
+  <!-- ===== SIDEBAR (desktop) ===== -->
+  <aside class="hidden md:flex md:flex-col md:w-56 md:shrink-0 md:border-r md:border-border md:bg-surface md:p-4 md:gap-1">
+    <!-- Logo -->
+    <div class="flex items-center gap-2 mb-6 px-1">
+      <span class="w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_rgba(240,180,41,0.6)]"></span>
+      <h1 class="font-mono text-sm font-bold text-accent tracking-wide">POLYBOT</h1>
+      <small class="font-mono text-[9px] text-muted mt-0.5" id="ver">v6.0</small>
     </div>
 
-    <!-- Alerts -->
-    <div id="alertsContainer"></div>
+    <!-- Nav -->
+    <nav class="flex flex-col gap-0.5 flex-1">
+      <button class="tab-btn sidebar-tab tab-active" data-tab="main">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        Dashboard
+      </button>
+      <button class="tab-btn sidebar-tab" data-tab="trades">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Trades
+      </button>
+      <button class="tab-btn sidebar-tab" data-tab="bayesian">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+        Bayesian
+      </button>
+      <button class="tab-btn sidebar-tab" data-tab="logs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Logs
+      </button>
+    </nav>
 
-    <!-- Market Window -->
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2 flex items-center gap-1.5">Market Window</div>
-      <div class="flex gap-3.5 items-center">
-        <div id="cdRing" class="relative inline-flex items-center justify-center flex-shrink-0">
-          <svg width="80" height="80" viewBox="0 0 80 80" class="-rotate-90">
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#2a2a3e" stroke-width="4"/>
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#00e5a0" stroke-width="4" stroke-dasharray="213.6" stroke-dashoffset="0" stroke-linecap="round" id="cdArc"/>
+    <!-- Settings (bottom of nav) -->
+    <div class="flex flex-col gap-1.5 pt-3 border-t border-border">
+      <button class="tab-btn sidebar-tab" data-tab="settings">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </button>
+    </div>
+
+    <!-- Engine Controls -->
+    <div class="flex flex-col gap-1.5 pt-1">
+      <button class="ctrl-btn ctrl-start" onclick="window.ctrl('start')">
+        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        Start
+      </button>
+      <button class="ctrl-btn ctrl-stop" onclick="window.ctrl('stop')">
+        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h4v12H6V6zm8 0h4v12h-4V6z"/></svg>
+        Stop
+      </button>
+      <button class="ctrl-btn ctrl-restart" onclick="window.ctrl('restart')">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Restart
+      </button>
+      <button class="ctrl-btn ctrl-reset" onclick="window.resetBreaker()">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+        Reset Risk
+      </button>
+    </div>
+
+    <!-- Theme Toggle -->
+    <button id="themeToggle-desktop" class="ctrl-btn mt-1.5" onclick="window.toggleTheme()" title="Toggle theme">
+      <svg class="w-3.5 h-3.5" id="themeIcon-desktop" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path class="sun-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        <path class="moon-icon hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+      <span id="themeLabel-desktop">Light</span>
+    </button>
+  </aside>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="flex-1 flex flex-col min-w-0">
+
+    <!-- Mobile Header -->
+    <header class="md:hidden flex items-center justify-between px-3 py-2.5 border-b border-border bg-surface shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_rgba(240,180,41,0.6)]"></span>
+        <h1 class="font-mono text-xs font-bold text-accent tracking-wide">POLYBOT</h1>
+        <small class="font-mono text-[8px] text-muted" id="ver-mobile">v6.0</small>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="statusDotEl"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
+        <span id="modeBadge" class="text-[8px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+        <span id="engineState" class="font-mono text-[9px] text-red">STOPPED</span>
+        <button id="themeToggle-mobile" class="ml-1 p-1 rounded hover:bg-white/5 transition-colors" onclick="window.toggleTheme()" title="Toggle theme">
+          <svg class="w-3.5 h-3.5" id="themeIcon-mobile" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path class="sun-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            <path class="moon-icon hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
           </svg>
-          <span id="winTime" class="absolute text-xl font-mono font-bold text-text">--</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Tab Panels -->
+    <div class="flex-1 overflow-y-auto px-2 sm:px-3 md:px-5 py-2 md:py-4 pb-20 md:pb-4">
+
+      <!-- ===== DASHBOARD TAB ===== -->
+      <section id="tab-main" class="tab-panel">
+
+        <!-- Status Bar (desktop) -->
+        <div class="hidden md:flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2.5">
+            <span id="statusDotEl-desktop"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
+            <span id="modeBadge-desktop" class="text-[8px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+            <span id="engineState-desktop" class="font-mono text-[10px] text-red">STOPPED</span>
+          </div>
+          <span id="timeDisplay" class="font-mono text-[9px] text-muted"></span>
         </div>
-        <div class="flex-1 grid grid-cols-2 gap-1">
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">Phase</span><span class="font-medium" id="winPhase">--</span></div>
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">Strike</span><span class="font-medium font-mono" id="winStrike">--</span></div>
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">UP</span><span class="font-medium text-green font-mono" id="winUp">--</span></div>
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">DOWN</span><span class="font-medium text-red font-mono" id="winDown">--</span></div>
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">Diff</span><span class="font-medium font-mono" id="winDiff">--</span></div>
-          <div class="flex justify-between items-center py-0.5 font-mono text-[10px] border-b border-border/30 last:border-none"><span class="text-text2">Signal</span><span class="font-semibold" id="winSignal">--</span></div>
+
+        <!-- Price Cards -->
+        <div class="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2">
+          <div class="price-card">
+            <div class="price-label">BTC/USDT</div>
+            <div class="price-value text-green" id="btcPrice">--</div>
+            <div class="price-sub" id="btcDelta">--</div>
+          </div>
+          <div class="price-card">
+            <div class="price-label">CHAINLINK</div>
+            <div class="price-value text-text" id="chainlinkPrice">--</div>
+            <div class="price-sub" id="clLag">--</div>
+          </div>
+          <div class="price-card">
+            <div class="price-label">POLYMARKET</div>
+            <div class="price-value text-accent text-sm sm:text-base" id="polyMarket">--</div>
+            <div class="price-sub" id="polyTokens">--</div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Signal -->
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2 flex items-center gap-1.5">
-        Current Signal <span id="sigType" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">NONE</span>
-      </div>
-      <div class="flex items-center gap-2.5 p-2 bg-surface2 rounded-lg border border-border mb-1.5">
-        <div id="sigDir" class="font-mono text-lg font-bold min-w-[60px] text-text2">--</div>
-        <div class="flex-1 h-2 bg-bg rounded overflow-hidden">
-          <div id="sigBar" class="h-full rounded transition-all duration-500" style="width:0%;background:#555570"></div>
+        <!-- Alerts -->
+        <div id="alertsContainer"></div>
+
+        <!-- Market Window + Signal -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-1.5 sm:gap-2 mb-2">
+          <div class="lg:col-span-3 card">
+            <div class="card-header">Market Window</div>
+            <div class="flex flex-col sm:flex-row gap-3 items-center sm:items-start">
+              <div class="relative inline-flex items-center justify-center shrink-0">
+                <svg width="72" height="72" viewBox="0 0 80 80" class="-rotate-90">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#2a2a3e" stroke-width="4"/>
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#00e5a0" stroke-width="4" stroke-dasharray="213.6" stroke-dashoffset="0" stroke-linecap="round" id="cdArc"/>
+                </svg>
+                <span id="winTime" class="absolute text-lg sm:text-xl font-mono font-bold text-text">--</span>
+              </div>
+              <div class="flex-1 w-full grid grid-cols-2 gap-x-3 gap-y-1">
+                <div class="win-stat"><span>Phase</span><span class="font-medium" id="winPhase">--</span></div>
+                <div class="win-stat"><span>Strike</span><span class="font-medium font-mono" id="winStrike">--</span></div>
+                <div class="win-stat"><span>UP</span><span class="font-medium text-green font-mono" id="winUp">--</span></div>
+                <div class="win-stat"><span>DOWN</span><span class="font-medium text-red font-mono" id="winDown">--</span></div>
+                <div class="win-stat"><span>Diff</span><span class="font-medium font-mono" id="winDiff">--</span></div>
+                <div class="win-stat"><span>Signal</span><span class="font-semibold">--</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="lg:col-span-2 card">
+            <div class="card-header flex items-center gap-2">
+              Current Signal
+              <span id="sigType" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">NONE</span>
+            </div>
+            <div class="flex items-center gap-2 p-2 bg-surface2 rounded-lg border border-border mb-1.5">
+              <div id="sigDir" class="font-mono text-base sm:text-lg font-bold min-w-[50px] text-text2">--</div>
+              <div class="flex-1 h-2 bg-bg rounded overflow-hidden">
+                <div id="sigBar" class="h-full rounded transition-all duration-500" style="width:0%;background:#555570"></div>
+              </div>
+              <div id="sigConf" class="font-mono text-xs sm:text-sm font-semibold min-w-[35px] text-right text-text2">--</div>
+            </div>
+            <div id="sigMeta" class="flex gap-1.5 flex-wrap font-mono text-[8px] sm:text-[9px] text-text2 leading-relaxed"></div>
+          </div>
         </div>
-        <div id="sigConf" class="font-mono text-sm font-semibold min-w-[40px] text-right text-text2">--</div>
-      </div>
-      <div id="sigMeta" class="flex gap-2.5 flex-wrap font-mono text-[9px] text-text2"></div>
+
+        <!-- Performance + Indicators -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 mb-2">
+          <div class="card">
+            <div class="card-header">Performance</div>
+            <div class="stat-row"><span class="text-text2">Win Rate</span><span id="perfWR">--</span></div>
+            <div class="stat-row"><span class="text-text2">Total Trades</span><span id="perfTotal">--</span></div>
+            <div class="stat-row"><span class="text-text2">W / L</span><span id="perfWL">--</span></div>
+            <div class="stat-row"><span class="text-text2">Total P&amp;L</span><span id="perfPNL">--</span></div>
+            <div class="stat-row"><span class="text-text2">Bankroll</span><span id="perfBankroll">--</span></div>
+            <div class="stat-row"><span class="text-text2">Drawdown</span><span id="perfDD">--</span></div>
+            <canvas id="pnlSparkline" class="w-full h-[50px] mt-1.5 rounded"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header">Indicators</div>
+            <div class="stat-row"><span class="text-text2">Wall Ratio</span><span id="indWall">--</span></div>
+            <div class="stat-row"><span class="text-text2">Lag Score</span><span id="indLag">--</span></div>
+            <div class="stat-row"><span class="text-text2">Momentum (60s)</span><span id="indMomentum">--</span></div>
+            <div class="stat-row"><span class="text-text2">Acceleration</span><span id="indAccel">--</span></div>
+            <div class="stat-row"><span class="text-text2">Volatility</span><span id="indVol">--</span></div>
+            <div class="stat-row"><span class="text-text2">Trend (120s)</span><span id="indTrend">--</span></div>
+          </div>
+        </div>
+
+        <!-- Risk + Modules -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-1.5 sm:gap-2 mb-2">
+          <div class="card">
+            <div class="card-header flex items-center gap-1.5">
+              Risk Management
+              <span id="riskBadge" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-green/12 text-green border border-green/20">OK</span>
+            </div>
+            <div id="riskContent"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">Module Status</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1" id="moduleGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TRADES TAB ===== -->
+      <section id="tab-trades" class="tab-panel hidden">
+        <div class="flex gap-1 mb-2 flex-wrap items-center">
+          <button class="btn-filter" onclick="window.setFilter('1h')">1H</button>
+          <button class="btn-filter" onclick="window.setFilter('24h')">24H</button>
+          <button class="btn-filter btn-filter-active" onclick="window.setFilter('all')" id="filterAll">ALL</button>
+          <span class="flex-1"></span>
+          <span id="tradeSummary" class="font-mono text-[9px] text-text2"></span>
+          <button class="btn" onclick="window.exportTrades('json')">JSON</button>
+          <button class="btn" onclick="window.exportTrades('csv')">CSV</button>
+        </div>
+        <div class="card overflow-x-auto !p-0">
+          <table class="w-full font-mono text-[9px] sm:text-[10px] border-collapse" id="tradeTable">
+            <thead>
+              <tr class="text-muted text-[8px] uppercase tracking-wider">
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium whitespace-nowrap">Time</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium">Dir</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium">Size</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium hidden sm:table-cell">Token</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium hidden sm:table-cell">Type</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium">Conf</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium">Outcome</th>
+                <th class="text-left px-2 py-1.5 border-b border-border font-medium">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="tradeBody"></tbody>
+          </table>
+          <div id="tradeEmpty" class="hidden py-8 text-center text-muted font-mono text-[10px]">No trades found</div>
+        </div>
+      </section>
+
+      <!-- ===== BAYESIAN TAB ===== -->
+      <section id="tab-bayesian" class="tab-panel hidden">
+        <div class="flex gap-1 mb-2 items-center">
+          <span class="font-mono text-[9px] text-text2">Signal bucket win rates (Bayesian)</span>
+          <span class="flex-1"></span>
+          <button class="btn btn-warning" onclick="window.fetchBayesian()">Refresh</button>
+        </div>
+        <div class="card !p-0">
+          <div id="bayesianContent"></div>
+        </div>
+      </section>
+
+      <!-- ===== LOGS TAB ===== -->
+      <section id="tab-logs" class="tab-panel hidden">
+        <div class="flex gap-1 mb-2 items-center">
+          <span class="font-mono text-[9px] text-text2" id="logCount">0 lines</span>
+          <span class="flex-1"></span>
+          <button class="btn btn-danger" onclick="window.clearLogs()">Clear</button>
+        </div>
+        <div class="card !p-0">
+          <div id="logBox" class="max-h-[50vh] sm:max-h-[400px] overflow-y-auto">
+            <div class="py-5 text-center text-muted font-mono text-[10px]">Loading...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SETTINGS TAB ===== -->
+      <section id="tab-settings" class="tab-panel hidden">
+        <div class="max-w-2xl">
+
+          <!-- Trading Config -->
+          <div class="card mb-2">
+            <div class="card-header">Trading Config</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Core trade parameters, mode selection, and bet limits</p>
+            <div class="setting-row"><span title="Enable simulation mode — no real funds are used">Dry Run Mode</span><button id="toggleDry" class="toggle-switch toggle-on" onclick="window.toggleDry()"></button></div>
+            <div id="liveWarn" class="hidden mb-1.5 p-1.5 rounded text-[9px] font-mono bg-red/12 border border-red/25 text-red">&#9888; LIVE MODE</div>
+            <div class="setting-row"><span title="Fixed USDC amount wagered per trade">Bet Size (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBetSize', -0.5)">−</button><input id="sBetSize" type="number" value="1" min="0.1" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBetSize', 0.5)">+</button></div></div>
+            <div class="setting-row"><span title="Maximum trades per hour">Max Trades / Hour</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxTrades', -1)">−</button><input id="sMaxTrades" type="number" value="12" min="1" max="50" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxTrades', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Minimum signal confidence (0-100%)">Min Confidence %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMinConf', -1)">−</button><input id="sMinConf" type="number" value="80" min="10" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMinConf', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Maximum USDC per trade">Max Bet (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxBet', -0.5)">−</button><input id="sMaxBet" type="number" value="3" min="0.1" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxBet', 0.5)">+</button></div></div>
+          </div>
+
+          <!-- Risk Limits -->
+          <div class="card mb-2">
+            <div class="card-header">Risk Limits</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Loss caps, drawdown limits, and position constraints</p>
+            <div class="setting-row"><span title="Maximum daily loss (USDC) before halting">Daily Loss Limit (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sDailyLoss', -1)">−</button><input id="sDailyLoss" type="number" value="6" min="1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sDailyLoss', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Maximum hourly loss percentage">Hourly Loss %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHourlyLoss', -0.5)">−</button><input id="sHourlyLoss" type="number" value="5" min="0.5" max="50" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHourlyLoss', 0.5)">+</button></div></div>
+            <div class="setting-row"><span title="Halt after N consecutive losses">Max Consecutive Losses</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxLossStreak', -1)">−</button><input id="sMaxLossStreak" type="number" value="4" min="1" max="10" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxLossStreak', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Maximum drawdown from peak">Max Drawdown %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxDD', -1)">−</button><input id="sMaxDD" type="number" value="10" min="1" max="50" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxDD', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Maximum open positions at once">Max Concurrent Positions</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxConcurrent', -1)">−</button><input id="sMaxConcurrent" type="number" value="3" min="1" max="10" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxConcurrent', 1)">+</button></div></div>
+          </div>
+
+          <!-- Cooldowns & Feed -->
+          <div class="card mb-2">
+            <div class="card-header">Cooldowns &amp; Feed</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Rest intervals and data-fetch timing</p>
+            <div class="setting-row"><span title="Seconds to pause after a loss">Cooldown After Loss (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sCooldown', -1)">−</button><input id="sCooldown" type="number" value="300" min="0" max="3600" class="setting-input" /><button class="adj-btn" onclick="window.adj('sCooldown', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Pause at end of each hour">Hourly Cooldown (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHourlyCooldown', -1)">−</button><input id="sHourlyCooldown" type="number" value="3600" min="60" max="86400" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHourlyCooldown', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Stale feed threshold">Stale Feed (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sStaleFeed', -1)">−</button><input id="sStaleFeed" type="number" value="60" min="10" max="300" class="setting-input" /><button class="adj-btn" onclick="window.adj('sStaleFeed', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Chainlink fallback poll interval">Chainlink Fallback (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sClFallbackInt', -1)">−</button><input id="sClFallbackInt" type="number" value="10" min="1" max="60" class="setting-input" /><button class="adj-btn" onclick="window.adj('sClFallbackInt', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Outcome check interval">Outcome Check (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sOutcomeInt', -1)">−</button><input id="sOutcomeInt" type="number" value="120" min="30" max="600" class="setting-input" /><button class="adj-btn" onclick="window.adj('sOutcomeInt', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Market data fetch interval">Market Fetch (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMarketInt', -1)">−</button><input id="sMarketInt" type="number" value="30" min="5" max="120" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMarketInt', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Balance fetch interval">Balance Fetch (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBalanceInt', -1)">−</button><input id="sBalanceInt" type="number" value="30" min="5" max="300" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBalanceInt', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Signal check interval">Signal Check (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sSigCheckInt', -1)">−</button><input id="sSigCheckInt" type="number" value="10" min="1" max="30" class="setting-input" /><button class="adj-btn" onclick="window.adj('sSigCheckInt', 1)">+</button></div></div>
+          </div>
+
+          <!-- Bet Sizing -->
+          <div class="card mb-2">
+            <div class="card-header">Bet Sizing</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Position size percentages and Kelly criterion</p>
+            <div class="setting-row"><span title="Base bet as % of bankroll">Base Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBaseBetPct', -0.1)">−</button><input id="sBaseBetPct" type="number" value="1" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBaseBetPct', 0.1)">+</button></div></div>
+            <div class="setting-row"><span title="High-confidence bet as % of bankroll">High-Conf Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHighConfBetPct', -0.1)">−</button><input id="sHighConfBetPct" type="number" value="2" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHighConfBetPct', 0.1)">+</button></div></div>
+            <div class="setting-row"><span title="Arbitrage bet as % of bankroll">Arb Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sArbBetPct', -0.1)">−</button><input id="sArbBetPct" type="number" value="5" min="0.1" max="20" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sArbBetPct', 0.1)">+</button></div></div>
+            <div class="setting-row"><span title="Kelly Criterion sizing">Kelly Sizing</span><button id="toggleKelly" class="toggle-switch" onclick="window.toggleKelly()"></button></div>
+            <div class="setting-row"><span title="Fraction of full Kelly bet">Kelly Fraction</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sKellyFrac', -0.05)">−</button><input id="sKellyFrac" type="number" value="0.30" min="0.01" max="1" step="0.05" class="setting-input" /><button class="adj-btn" onclick="window.adj('sKellyFrac', 0.05)">+</button></div></div>
+          </div>
+
+          <!-- Bankroll -->
+          <div class="card mb-2">
+            <div class="card-header">Bankroll</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Starting capital and max token price</p>
+            <div class="setting-row"><span title="Starting balance for %-based sizing">Initial Bankroll (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sInitBankroll', -1)">−</button><input id="sInitBankroll" type="number" value="100" min="10" class="setting-input" /><button class="adj-btn" onclick="window.adj('sInitBankroll', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Max token price (0-1)">Max Token Price</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxTokenPrice', -0.01)">−</button><input id="sMaxTokenPrice" type="number" value="0.92" min="0.5" max="0.99" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxTokenPrice', 0.01)">+</button></div></div>
+          </div>
+
+          <!-- Guards -->
+          <div class="card mb-2">
+            <div class="card-header">Guards</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Toxic flow, edge lag, and market integrity</p>
+            <div class="setting-row"><span title="Max Chainlink lag % before blocking">Toxic Lag %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sToxicLag', -0.1)">−</button><input id="sToxicLag" type="number" value="1.0" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sToxicLag', 0.1)">+</button></div></div>
+            <div class="setting-row"><span title="Upper bound for favorable oracle lag">Edge Lag Max %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeLagMax', -0.1)">−</button><input id="sEdgeLagMax" type="number" value="1.5" min="0.1" max="5" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeLagMax', 0.1)">+</button></div></div>
+            <div class="setting-row"><span title="Lower bound for favorable oracle lag">Edge Lag Min %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeLagMin', -0.1)">−</button><input id="sEdgeLagMin" type="number" value="0.3" min="0.1" max="2" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeLagMin', 0.1)">+</button></div></div>
+          </div>
+
+          <!-- Auto-Stop -->
+          <div class="card mb-2">
+            <div class="card-header">Auto-Stop</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Automatic halt based on win rate</p>
+            <div class="setting-row"><span title="Recent trades used for win rate">Win Rate Lookback</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWinRateLb', -1)">−</button><input id="sWinRateLb" type="number" value="20" min="5" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWinRateLb', 1)">+</button></div></div>
+            <div class="setting-row"><span title="Win rate below this halts trading">Win Rate Threshold %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWinRateThresh', -1)">−</button><input id="sWinRateThresh" type="number" value="45" min="10" max="90" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWinRateThresh', 1)">+</button></div></div>
+          </div>
+
+          <!-- Signal Modules -->
+          <div class="card mb-2">
+            <div class="card-header">Signal Modules</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Toggle individual signal strategies</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+              <div class="setting-row"><span title="Exploit price discrepancies between tokens">Arbitrage</span><button id="modSignalArb" class="toggle-switch toggle-on" onclick="window.toggleMod('modSignalArb')"></button></div>
+              <div class="setting-row"><span title="Override signal on extreme delta">Delta Override</span><button id="modDeltaOverride" class="toggle-switch toggle-on" onclick="window.toggleMod('modDeltaOverride')"></button></div>
+              <div class="setting-row"><span title="Trade Chainlink oracle lag">Latency Arb</span><button id="modLatencyArb" class="toggle-switch toggle-on" onclick="window.toggleMod('modLatencyArb')"></button></div>
+              <div class="setting-row"><span title="Relative price movement in a window">Window Delta</span><button id="modWindowDelta" class="toggle-switch toggle-on" onclick="window.toggleMod('modWindowDelta')"></button></div>
+              <div class="setting-row"><span title="Bet on cheaper outcome reversal">Cheap Side Rev</span><button id="modCheapSide" class="toggle-switch toggle-on" onclick="window.toggleMod('modCheapSide')"></button></div>
+              <div class="setting-row"><span title="Volatility-based edge detection">Vol Edge</span><button id="modVolEdge" class="toggle-switch toggle-on" onclick="window.toggleMod('modVolEdge')"></button></div>
+              <div class="setting-row"><span title="Wall + momentum combination">Wall + Momentum</span><button id="modWallMomentum" class="toggle-switch toggle-on" onclick="window.toggleMod('modWallMomentum')"></button></div>
+              <div class="setting-row"><span title="Order book wall bias">Wall Bias</span><button id="modWallBias" class="toggle-switch toggle-on" onclick="window.toggleMod('modWallBias')"></button></div>
+              <div class="setting-row"><span title="Oracle lag discrepancy">Oracle Lag</span><button id="modOracleLag" class="toggle-switch toggle-on" onclick="window.toggleMod('modOracleLag')"></button></div>
+              <div class="setting-row"><span title="Pure momentum signals">Momentum Only</span><button id="modMomentumOnly" class="toggle-switch toggle-on" onclick="window.toggleMod('modMomentumOnly')"></button></div>
+              <div class="setting-row"><span title="Mean reversion signals">Mean Reversion</span><button id="modMeanReversion" class="toggle-switch toggle-on" onclick="window.toggleMod('modMeanReversion')"></button></div>
+              <div class="setting-row"><span title="Favorable resolution prices">Resolution Hunt</span><button id="modResolutionHunt" class="toggle-switch toggle-on" onclick="window.toggleMod('modResolutionHunt')"></button></div>
+              <div class="setting-row"><span title="Aggressive deadline filling">Hard Deadline</span><button id="modHardDeadline" class="toggle-switch toggle-on" onclick="window.toggleMod('modHardDeadline')"></button></div>
+              <div class="setting-row"><span title="Hedge arbitrage positions">Arb Hedge</span><button id="modArbHedge" class="toggle-switch toggle-on" onclick="window.toggleMod('modArbHedge')"></button></div>
+            </div>
+          </div>
+
+          <!-- Trading Guards -->
+          <div class="card mb-2">
+            <div class="card-header">Trading Guards</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Trade validation filters and safety checks</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+              <div class="setting-row"><span title="Require sustained momentum">Momentum Consistency</span><button id="guardMomentum" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardMomentum')"></button></div>
+              <div class="setting-row"><span title="Block trades in high volatility">Volatility Guard</span><button id="guardVolatility" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardVolatility')"></button></div>
+              <div class="setting-row"><span title="Require volume confirmation">Volume Confirmation</span><button id="guardVolume" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardVolume')"></button></div>
+              <div class="setting-row"><span title="Filter against-trend signals">Trend Bias Filter</span><button id="guardTrend" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardTrend')"></button></div>
+              <div class="setting-row"><span title="Halt on consecutive losses">Consecutive Loss</span><button id="guardConsecutive" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardConsecutive')"></button></div>
+              <div class="setting-row"><span title="Block on stale feed">Stale Feed Guard</span><button id="guardStaleFeed" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardStaleFeed')"></button></div>
+              <div class="setting-row"><span title="Min time between signals">Signal Cooldown</span><button id="guardSignal" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardSignal')"></button></div>
+              <div class="setting-row"><span title="Fee-aware edge gate">Fee-Aware Gate</span><button id="guardFee" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardFee')"></button></div>
+              <div class="setting-row"><span title="Block trades near 0.50 midpoint">Edge Block (Mid)</span><button id="guardEdge" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardEdge')"></button></div>
+            </div>
+          </div>
+
+          <!-- Strategy Tuning -->
+          <div class="card mb-2">
+            <div class="card-header">Strategy Tuning</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Detection thresholds for each signal module</p>
+            <details class="group" open>
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Wall Detection
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Bid/ask ratio above this = UP signal">UP Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWallUp', -0.1)">−</button><input id="sWallUp" type="number" value="2.5" min="1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWallUp', 0.1)">+</button></div></div>
+                <div class="setting-row"><span title="Bid/ask ratio below this = DOWN signal">DOWN Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWallDown', -0.1)">−</button><input id="sWallDown" type="number" value="0.4" min="0.1" max="0.9" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWallDown', 0.1)">+</button></div></div>
+                <div class="setting-row"><span title="Max wall ratio cap">Max Cap</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWallMax', -0.5)">−</button><input id="sWallMax" type="number" value="5.0" min="2" max="20" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWallMax', 0.5)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Momentum
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Delta for strengthening momentum">Strengthening Delta</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMomStrong', -1)">−</button><input id="sMomStrong" type="number" value="50" min="10" max="200" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMomStrong', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Delta for moderate momentum">Moderate Delta</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMomMod', -1)">−</button><input id="sMomMod" type="number" value="25" min="5" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMomMod', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Below this delta = block signal">Block Delta</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMomBlock', -1)">−</button><input id="sMomBlock" type="number" value="20" min="5" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMomBlock', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Confidence cap when opposing trend">Opposition Cap %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMomOppCap', -1)">−</button><input id="sMomOppCap" type="number" value="65" min="50" max="90" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMomOppCap', 1)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Latency Arb
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Min price move % for latency arb">Min Move %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sLatMove', -0.05)">−</button><input id="sLatMove" type="number" value="0.3" min="0.1" max="2" step="0.05" class="setting-input" /><button class="adj-btn" onclick="window.adj('sLatMove', 0.05)">+</button></div></div>
+                <div class="setting-row"><span title="Max token price for latency arb">Max Token Price</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sLatToken', -0.01)">−</button><input id="sLatToken" type="number" value="0.70" min="0.3" max="0.95" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sLatToken', 0.01)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Window Delta
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Min delta % in window">Min Delta %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWdDelta', -0.05)">−</button><input id="sWdDelta" type="number" value="0.2" min="0.05" max="1" step="0.05" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWdDelta', 0.05)">+</button></div></div>
+                <div class="setting-row"><span title="Max token price for window delta">Max Token Price</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWdToken', -0.01)">−</button><input id="sWdToken" type="number" value="0.70" min="0.3" max="0.95" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWdToken', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Max window length">Time Max (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWdTimeMax', -1)">−</button><input id="sWdTimeMax" type="number" value="50" min="20" max="120" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWdTimeMax', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Min window length">Time Min (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWdTimeMin', -1)">−</button><input id="sWdTimeMin" type="number" value="10" min="5" max="60" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWdTimeMin', 1)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Cheap Side / Vol Edge
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Price ratio for cheap-side reversal">Cheap Side Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sCsThresh', -0.01)">−</button><input id="sCsThresh" type="number" value="0.85" min="0.7" max="0.99" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sCsThresh', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Min volatility edge for Vol Edge">Vol Edge Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sVolThresh', -0.005)">−</button><input id="sVolThresh" type="number" value="0.05" min="0.01" max="0.2" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sVolThresh', 0.005)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Arbitrage
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Price ratio for arbitrage signal">Arb Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sArbThresh', -0.001)">−</button><input id="sArbThresh" type="number" value="0.985" min="0.9" max="0.999" step="0.001" class="setting-input" /><button class="adj-btn" onclick="window.adj('sArbThresh', 0.001)">+</button></div></div>
+                <div class="setting-row"><span title="Price ratio for hedge trigger">Hedge Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHedgeThresh', -0.001)">−</button><input id="sHedgeThresh" type="number" value="0.99" min="0.9" max="0.999" step="0.001" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHedgeThresh', 0.001)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Bayesian
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Min trades for Bayesian adjustment">Min Trades</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBayesMin', -1)">−</button><input id="sBayesMin" type="number" value="3" min="1" max="20" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBayesMin', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Boost for high-WR bucket">Boost (High WR)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBayesBoostHigh', -1)">−</button><input id="sBayesBoostHigh" type="number" value="5" min="1" max="20" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBayesBoostHigh', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Boost for low-WR bucket">Boost (Low WR)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBayesBoostLow', -1)">−</button><input id="sBayesBoostLow" type="number" value="3" min="1" max="20" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBayesBoostLow', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Penalty for high-WR bucket">Penalty (High)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBayesPenHigh', -1)">−</button><input id="sBayesPenHigh" type="number" value="-10" min="-30" max="0" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBayesPenHigh', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Penalty for low-WR bucket">Penalty (Low)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBayesPenLow', -1)">−</button><input id="sBayesPenLow" type="number" value="-5" min="-20" max="0" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBayesPenLow', 1)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Resolution Hunt
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Threshold at ~3 min to expiry">T3 Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sResT3', -0.005)">−</button><input id="sResT3" type="number" value="0.04" min="0.01" max="0.15" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sResT3', 0.005)">+</button></div></div>
+                <div class="setting-row"><span title="Threshold at ~5 min to expiry">T5 Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sResT5', -0.005)">−</button><input id="sResT5" type="number" value="0.04" min="0.01" max="0.15" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sResT5', 0.005)">+</button></div></div>
+                <div class="setting-row"><span title="Threshold at ~10 min to expiry">T10 Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sResT10', -0.005)">−</button><input id="sResT10" type="number" value="0.03" min="0.01" max="0.15" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sResT10', 0.005)">+</button></div></div>
+                <div class="setting-row"><span title="Threshold at ~20 min to expiry">T20 Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sResT20', -0.005)">−</button><input id="sResT20" type="number" value="0.05" min="0.01" max="0.15" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sResT20', 0.005)">+</button></div></div>
+                <div class="setting-row"><span title="Baseline price threshold">Base Threshold</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sResBase', -0.005)">−</button><input id="sResBase" type="number" value="0.08" min="0.01" max="0.2" step="0.005" class="setting-input" /><button class="adj-btn" onclick="window.adj('sResBase', 0.005)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Phases
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Phase 1 start (s remaining)">Phase 1 Min (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sPhase1', -1)">−</button><input id="sPhase1" type="number" value="250" min="200" max="295" class="setting-input" /><button class="adj-btn" onclick="window.adj('sPhase1', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Phase 2 start (s remaining)">Phase 2 Min (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sPhase2', -1)">−</button><input id="sPhase2" type="number" value="100" min="50" max="200" class="setting-input" /><button class="adj-btn" onclick="window.adj('sPhase2', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Phase 3 start (s remaining)">Phase 3 Min (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sPhase3', -1)">−</button><input id="sPhase3" type="number" value="30" min="10" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sPhase3', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Phase 4 start (s remaining)">Phase 4 Min (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sPhase4', -1)">−</button><input id="sPhase4" type="number" value="5" min="1" max="30" class="setting-input" /><button class="adj-btn" onclick="window.adj('sPhase4', 1)">+</button></div></div>
+              </div>
+            </details>
+            <details class="group">
+              <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
+                <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                Misc
+              </summary>
+              <div class="pl-3">
+                <div class="setting-row"><span title="Min seconds between same-source signals">Signal Cooldown (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sSigGuardCD', -1)">−</button><input id="sSigGuardCD" type="number" value="120" min="30" max="600" class="setting-input" /><button class="adj-btn" onclick="window.adj('sSigGuardCD', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Min trend strength % for trend filter">Trend Bias %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sTrendThresh', -0.01)">−</button><input id="sTrendThresh" type="number" value="0.15" min="0.05" max="1" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sTrendThresh', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Fee buffer in price points">Fee Buffer (pp)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sFeeBuf', -1)">−</button><input id="sFeeBuf" type="number" value="5" min="1" max="20" class="setting-input" /><button class="adj-btn" onclick="window.adj('sFeeBuf', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Spread % that blocks trades">Vol Block Spread %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sVolBlock', -0.1)">−</button><input id="sVolBlock" type="number" value="0.5" min="0.1" max="3" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sVolBlock', 0.1)">+</button></div></div>
+                <div class="setting-row"><span title="Min volume ratio for confirmation">Volume Ratio</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sVolRatio', -0.1)">−</button><input id="sVolRatio" type="number" value="0.5" min="0.1" max="2" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sVolRatio', 0.1)">+</button></div></div>
+                <div class="setting-row"><span title="Edge block midpoint lower bound">Edge Mid Low</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeMidLow', -0.01)">−</button><input id="sEdgeMidLow" type="number" value="0.47" min="0.3" max="0.5" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeMidLow', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Edge block midpoint upper bound">Edge Mid High</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeMidHigh', -0.01)">−</button><input id="sEdgeMidHigh" type="number" value="0.53" min="0.5" max="0.7" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeMidHigh', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Price markup multiplier for orders">Order Markup</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sPriceMarkup', -0.01)">−</button><input id="sPriceMarkup" type="number" value="1.05" min="1.0" max="1.2" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sPriceMarkup', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Max order price limit">Max Order Price</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxOrdPrice', -0.01)">−</button><input id="sMaxOrdPrice" type="number" value="0.99" min="0.5" max="0.999" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxOrdPrice', 0.01)">+</button></div></div>
+                <div class="setting-row"><span title="Confidence penalty when opposing trend">Trend Penalty</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sTrendPen', -1)">−</button><input id="sTrendPen" type="number" value="15" min="0" max="30" class="setting-input" /><button class="adj-btn" onclick="window.adj('sTrendPen', 1)">+</button></div></div>
+                <div class="setting-row"><span title="Confidence bonus when with trend">Trend Bonus</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sTrendBonus', -1)">−</button><input id="sTrendBonus" type="number" value="5" min="0" max="20" class="setting-input" /><button class="adj-btn" onclick="window.adj('sTrendBonus', 1)">+</button></div></div>
+              </div>
+            </details>
+          </div>
+
+          <!-- API Credentials -->
+          <div class="card mb-2">
+            <div class="card-header">API Credentials</div>
+            <p class="text-[8px] font-mono text-text2 mb-1.5">Polymarket wallet keys, API credentials, and RPC settings</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+              <div class="setting-row sm:col-span-2"><span title="Wallet private key (0x-prefixed)">Private Key</span><input id="env-POLY_PRIVATE_KEY" type="password" class="setting-input" style="width:280px" /></div>
+              <div class="setting-row sm:col-span-2"><span title="Polymarket wallet address">Wallet Address</span><input id="env-POLY_WALLET_ADDRESS" type="text" class="setting-input" style="width:280px" /></div>
+              <div class="setting-row"><span title="Relayer API key address">Relayer API Addr</span><input id="env-RELAYER_API_KEY_ADDRESS" type="text" class="setting-input" style="width:180px" /></div>
+              <div class="setting-row"><span title="Polymarket API key">API Key</span><input id="env-POLY_API_KEY" type="text" class="setting-input" style="width:180px" /></div>
+              <div class="setting-row"><span title="API secret (auto-generated if blank)">API Secret</span><input id="env-POLY_API_SECRET" type="password" class="setting-input" style="width:180px" /></div>
+              <div class="setting-row"><span title="API passphrase (auto-generated if blank)">API Passphrase</span><input id="env-POLY_API_PASSPHRASE" type="password" class="setting-input" style="width:180px" /></div>
+              <div class="setting-row"><span title="Polygon RPC endpoint">RPC URL</span><input id="env-POLYGON_RPC" type="text" class="setting-input" style="width:180px" /></div>
+              <div class="setting-row"><span title="1=EOA, 3=Poly1271">Sig Type</span><input id="env-POLY_SIGNATURE_TYPE" type="number" min="1" max="3" step="1" value="1" class="setting-input" style="width:60px" /></div>
+              <div class="setting-row"><span title="Deposit wallet (Poly1271 only)">Deposit Wallet</span><input id="env-POLY_DEPOSIT_WALLET_ADDRESS" type="text" class="setting-input" style="width:180px" placeholder="Optional" /></div>
+              <div class="setting-row"><span title="RTDS WebSocket URL">RTDS WS URL</span><input id="env-POLY_RTDS_WS_URL" type="text" class="setting-input" style="width:180px" placeholder="Optional" /></div>
+              <div class="setting-row"><span title="Dashboard API auth key">Dashboard API Key</span><input id="env-POLYBOT_API_KEY" type="password" class="setting-input" style="width:180px" placeholder="Optional" /></div>
+              <div class="setting-row"><span title="Logging verbosity">Log Level</span>
+                <select id="env-POLYBOT_LOG_LEVEL" class="setting-input" style="width:80px;text-align:left;-moz-appearance:auto">
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="INFO" selected>INFO</option>
+                  <option value="WARN">WARN</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex gap-1.5 mt-2">
+              <button class="btn btn-primary flex-1 py-1.5 text-xs" onclick="window.saveEnv()">Save Credentials</button>
+            </div>
+          </div>
+
+          <!-- Save -->
+          <div class="flex gap-1.5 mt-3 mb-2">
+            <button class="btn btn-primary flex-1 py-2 text-xs" onclick="window.saveSettings()">Save Settings</button>
+          </div>
+
+          <!-- Actions -->
+          <div class="card mb-2">
+            <div class="card-header">Actions</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              <button class="btn btn-primary" onclick="window.ctrl('start')">&#9654; Start</button>
+              <button class="btn btn-danger" onclick="window.ctrl('stop')">&#9632; Stop</button>
+              <button class="btn btn-warning" onclick="window.ctrl('restart')">&#8635; Restart</button>
+              <button class="btn btn-warning" onclick="window.resetBreaker()">&#128260; Reset Risk</button>
+              <button class="btn btn-danger" onclick="window.resetHard()">&#9888; Factory Reset</button>
+            </div>
+          </div>
+
+          <div class="text-[8px] text-muted text-center py-3 font-mono">
+            PolyBot v6.0 &mdash; Polymarket BTC Up/Down 5m
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Grid: Performance + Indicators -->
-    <div class="grid grid-cols-2 gap-1.5 mb-2">
-      <div class="bg-surface border border-border rounded-lg p-3">
-        <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2">Performance</div>
-        <div class="stat-row"><span class="text-text2">Win Rate</span><span id="perfWR">--</span></div>
-        <div class="stat-row"><span class="text-text2">Total Trades</span><span id="perfTotal">--</span></div>
-        <div class="stat-row"><span class="text-text2">Wins / Losses</span><span id="perfWL">--</span></div>
-        <div class="stat-row"><span class="text-text2">Total P&amp;L</span><span id="perfPNL">--</span></div>
-        <div class="stat-row"><span class="text-text2">Bankroll</span><span id="perfBankroll">--</span></div>
-        <div class="stat-row"><span class="text-text2">Drawdown</span><span id="perfDD">--</span></div>
-        <canvas id="pnlSparkline" class="w-full h-[50px] mt-1.5"></canvas>
-      </div>
-      <div class="bg-surface border border-border rounded-lg p-3">
-        <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2">Indicators</div>
-        <div class="stat-row"><span class="text-text2">Wall Ratio</span><span id="indWall" class="font-mono">--</span></div>
-        <div class="stat-row"><span class="text-text2">Lag Score</span><span id="indLag" class="font-mono">--</span></div>
-        <div class="stat-row"><span class="text-text2">Momentum (60s)</span><span id="indMomentum" class="font-mono">--</span></div>
-        <div class="stat-row"><span class="text-text2">Acceleration</span><span id="indAccel" class="font-mono">--</span></div>
-        <div class="stat-row"><span class="text-text2">Volatility</span><span id="indVol" class="font-mono">--</span></div>
-        <div class="stat-row"><span class="text-text2">Trend (120s)</span><span id="indTrend" class="font-mono">--</span></div>
-      </div>
-    </div>
-
-    <!-- Risk -->
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2 flex items-center gap-1.5">
-        Risk Management <span id="riskBadge" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-green/12 text-green border border-green/20">OK</span>
-      </div>
-      <div id="riskContent"></div>
-    </div>
-
-    <!-- Module Status -->
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2">Module Status</div>
-      <div class="grid grid-cols-2 gap-1" id="moduleGrid"></div>
-    </div>
-  </section>
-
-  <!-- ===== TRADES TAB ===== -->
-  <section id="tab-trades" class="tab-panel hidden">
-    <div class="flex gap-1 mb-2 flex-wrap items-center">
-      <button class="btn-filter" onclick="window.setFilter('1h')">1H</button>
-      <button class="btn-filter" onclick="window.setFilter('24h')">24H</button>
-      <button class="btn-filter btn-filter-active" onclick="window.setFilter('all')" id="filterAll">ALL</button>
-      <span class="flex-1"></span>
-      <span id="tradeSummary" class="font-mono text-[9px] text-text2"></span>
-      <button class="btn" onclick="window.exportTrades('json')">JSON</button>
-      <button class="btn" onclick="window.exportTrades('csv')">CSV</button>
-    </div>
-    <div class="bg-surface border border-border rounded-lg overflow-x-auto" style="padding:0">
-      <table class="w-full font-mono text-[10px] border-collapse" id="tradeTable">
-        <thead>
-          <tr class="text-muted text-[8px] uppercase tracking-wider">
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Time</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Dir</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Size</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Token</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Type</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Conf</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">Outcome</th>
-            <th class="text-left px-2 py-1.5 border-b border-border font-medium">P&amp;L</th>
-          </tr>
-        </thead>
-        <tbody id="tradeBody"></tbody>
-      </table>
-      <div id="tradeEmpty" class="hidden py-8 text-center text-muted font-mono text-[10px]">No trades found</div>
-    </div>
-  </section>
-
-  <!-- ===== BAYESIAN TAB ===== -->
-  <section id="tab-bayesian" class="tab-panel hidden">
-    <div class="flex gap-1 mb-2 items-center">
-      <span class="font-mono text-[9px] text-text2">Signal bucket win rates (Bayesian)</span>
-      <span class="flex-1"></span>
-      <button class="btn btn-warning" onclick="window.fetchBayesian()">Refresh</button>
-    </div>
-    <div class="bg-surface border border-border rounded-lg" style="padding:0">
-      <div id="bayesianContent"></div>
-    </div>
-  </section>
-
-  <!-- ===== LOGS TAB ===== -->
-  <section id="tab-logs" class="tab-panel hidden">
-    <div class="flex gap-1 mb-2 items-center">
-      <span class="font-mono text-[9px] text-text2" id="logCount">0 lines</span>
-      <span class="flex-1"></span>
-      <button class="btn btn-danger" onclick="window.clearLogs()">Clear</button>
-    </div>
-    <div class="bg-surface border border-border rounded-lg" style="padding:0">
-      <div id="logBox" class="max-h-[400px] overflow-y-auto">
-        <div class="py-5 text-center text-muted font-mono text-[10px]">Loading...</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== SETTINGS TAB ===== -->
-  <section id="tab-settings" class="tab-panel hidden">
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2">Trading Config</div>
-
-      <div class="setting-row"><span class="text-text2">Dry Run Mode</span><button id="toggleDry" class="toggle-switch toggle-on" onclick="window.toggleDry()"></button></div>
-      <div id="liveWarn" class="hidden mb-1.5 p-1.5 rounded text-[9px] font-mono bg-red/12 border border-red/25 text-red">&#9888; LIVE MODE — real money trading active</div>
-
-      <div class="setting-row"><span class="text-text2">Bet Size (USDC)</span><input id="sBetSize" type="number" value="1" min="0.1" step="0.5" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Max Trades / Hour</span><input id="sMaxTrades" type="number" value="6" min="1" max="50" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Min Confidence %</span><input id="sMinConf" type="number" value="75" min="10" max="100" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Daily Loss Limit (USDC)</span><input id="sDailyLoss" type="number" value="8" min="1" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Consecutive Loss Limit</span><input id="sMaxLossStreak" type="number" value="3" min="1" max="10" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Max Drawdown %</span><input id="sMaxDD" type="number" value="10" min="1" max="50" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Cooldown After Loss (s)</span><input id="sCooldown" type="number" value="180" min="0" max="3600" class="setting-input" /></div>
-      <div class="setting-row"><span class="text-text2">Kelly Sizing</span><button id="toggleKelly" class="toggle-switch" onclick="window.toggleKelly()"></button></div>
-
-      <div class="flex gap-1 mt-2">
-        <button class="btn btn-primary flex-1" onclick="window.saveSettings()">Save Settings</button>
-      </div>
-    </div>
-
-    <div class="bg-surface border border-border rounded-lg p-3 mb-2">
-      <div class="text-[8px] font-mono font-semibold tracking-wider text-muted uppercase mb-2">Actions</div>
-      <div class="flex gap-1 flex-wrap">
-        <button class="btn btn-primary" onclick="window.ctrl('start')">&#9654; Start Engine</button>
-        <button class="btn btn-danger" onclick="window.ctrl('stop')">&#9632; Stop Engine</button>
-        <button class="btn btn-warning" onclick="window.ctrl('restart')">&#8635; Restart</button>
-        <button class="btn btn-warning" onclick="window.resetBreaker()">&#128260; Reset Risk Blocks</button>
-        <button class="btn btn-danger" onclick="window.resetHard()">&#9888; Factory Reset</button>
-      </div>
-    </div>
-
-    <div class="text-[8px] text-muted text-center py-2.5 font-mono">
-      PolyBot v6.0 &mdash; Polymarket BTC Up/Down 5m
-    </div>
-  </section>
+    <!-- ===== BOTTOM NAV (mobile) ===== -->
+    <nav class="md:hidden flex shrink-0 bg-surface border-t border-border">
+      <button class="bottom-tab tab-btn tab-active" data-tab="main">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="bottom-tab tab-btn" data-tab="trades">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        <span>Trades</span>
+      </button>
+      <button class="bottom-tab tab-btn" data-tab="bayesian">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+        <span>Bayesian</span>
+      </button>
+      <button class="bottom-tab tab-btn" data-tab="logs">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>Logs</span>
+      </button>
+      <button class="bottom-tab tab-btn" data-tab="settings">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+  </main>
 </div>
 
 <!-- Toast -->
-<div id="toast" class="fixed top-[50px] left-1/2 -translate-x-1/2 -translate-y-5 bg-surface border border-border rounded-lg px-4 py-2 font-mono text-[10px] z-[999] opacity-0 transition-all duration-300 pointer-events-none shadow-[0_8px_30px_rgba(0,0,0,0.5)]"></div>
+<div id="toast" class="fixed top-3 sm:top-[18px] left-1/2 -translate-x-1/2 -translate-y-5 bg-surface border border-border rounded-lg px-4 py-2 font-mono text-[10px] z-[999] opacity-0 transition-all duration-300 pointer-events-none shadow-[0_8px_30px_rgba(0,0,0,0.5)]"></div>
 
 <script type="module" src="/src/main.js"></script>
 </body>

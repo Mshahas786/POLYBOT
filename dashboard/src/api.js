@@ -1,5 +1,20 @@
 export const API = 'http://127.0.0.1:3000'
 
+export async function get(endpoint) {
+  const r = await fetch(API + '/' + endpoint)
+  if (!r.ok) throw new Error('HTTP ' + r.status)
+  return r.json()
+}
+
+export async function post(endpoint, data) {
+  const r = await fetch(API + '/' + endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return r.json()
+}
+
 export async function getStatus() {
   const r = await fetch(API + '/status')
   if (!r.ok) throw new Error('HTTP ' + r.status)

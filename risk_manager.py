@@ -20,8 +20,10 @@ class RiskManager:
         self.cfg = cfg
         self.bot_dir = bot_dir
         self.state_path = bot_dir / "risk_state.json"
+        self._load_cfg()
 
-        rc = cfg.get("risk_management", {})
+    def _load_cfg(self):
+        rc = self.cfg.get("risk_management", {})
         self.enabled = rc.get("enabled", True)
         # Daily limits
         self.daily_loss_limit = float(rc.get("daily_loss_limit_usdc", 10.0))
