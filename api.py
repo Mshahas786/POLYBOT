@@ -2076,6 +2076,13 @@ def get_stats():
     elif period == "24h":
         cutoff = (now - timedelta(hours=24)).isoformat()
         filtered = [t for t in trades if t.get("timestamp", "") > cutoff]
+    elif period.endswith("d"):
+        try:
+            days = int(period[:-1])
+            cutoff = (now - timedelta(days=days)).isoformat()
+            filtered = [t for t in trades if t.get("timestamp", "") > cutoff]
+        except ValueError:
+            pass
     wins = sum(1 for t in filtered if t.get("outcome") == "win")
     losses = sum(1 for t in filtered if t.get("outcome") == "loss")
     pnl = sum(float(t.get("pnl", 0) or 0) for t in filtered if t.get("pnl") is not None)

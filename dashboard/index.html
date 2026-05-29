@@ -89,15 +89,9 @@
         <small class="font-mono text-[9px] md:text-[10px] font-semibold text-muted" id="ver-mobile">v6.0</small>
       </div>
       <div class="flex items-center gap-2">
-        <span id="statusDotEl"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
-        <span id="modeBadge" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+        <span id="serverLabel" class="font-mono text-[9px] md:text-[10px] text-green">Online</span>
+        <span class="text-muted text-[9px]">|</span>
         <span id="engineState" class="font-mono text-[10px] md:text-xs text-red">STOPPED</span>
-        <button id="themeToggle-mobile" class="ml-1 p-1 rounded hover:bg-white/5 transition-colors" onclick="window.toggleTheme()" title="Toggle theme">
-          <svg class="w-3.5 h-3.5" id="themeIcon-mobile" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path class="sun-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-            <path class="moon-icon hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-        </button>
       </div>
     </header>
 
@@ -107,11 +101,11 @@
       <!-- ===== DASHBOARD TAB ===== -->
       <section id="tab-main" class="tab-panel">
 
-        <!-- Status Bar (desktop) -->
-        <div class="hidden md:flex items-center justify-between mb-3">
+        <!-- Status Bar -->
+        <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2.5">
-            <span id="statusDotEl-desktop"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
-            <span id="modeBadge-desktop" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+            <span id="serverLabel-desktop" class="font-mono text-[10px] md:text-xs text-green">Online</span>
+            <span class="text-muted text-[10px]">|</span>
             <span id="engineState-desktop" class="font-mono text-[10px] md:text-xs text-red">STOPPED</span>
           </div>
           <span id="timeDisplay" class="font-mono text-[10px] md:text-xs text-muted"></span>
@@ -221,11 +215,23 @@
         <div class="flex gap-1 mb-2 flex-wrap items-center">
           <button class="btn-filter" onclick="window.setFilter('1h')">1H</button>
           <button class="btn-filter" onclick="window.setFilter('24h')">24H</button>
+          <button class="btn-filter" onclick="window.setFilter('7d')">7D</button>
+          <button class="btn-filter" onclick="window.setFilter('30d')">30D</button>
           <button class="btn-filter btn-filter-active" onclick="window.setFilter('all')" id="filterAll">ALL</button>
+          <span class="flex items-center gap-1 font-mono text-[10px] md:text-xs text-text2 ml-1">
+            <span>Days:</span>
+            <div class="flex items-center gap-0.5">
+              <button class="adj-btn" onclick="window.adjDays(-1)">−</button>
+              <input id="daysInput" type="number" min="1" max="365" value="7" class="w-[35px] bg-bg border border-border rounded px-1 py-0.5 text-right text-text text-[10px] font-mono">
+              <button class="adj-btn" onclick="window.adjDays(1)">+</button>
+            </div>
+            <button class="btn-filter" onclick="window.setFilter('days')">Go</button>
+          </span>
           <span class="flex-1"></span>
           <span id="tradeSummary" class="font-mono text-[10px] md:text-xs text-text2"></span>
           <button class="btn" onclick="window.exportTrades('json')">JSON</button>
           <button class="btn" onclick="window.exportTrades('csv')">CSV</button>
+          <button class="btn btn-danger" onclick="window.clearTrades()">Clear</button>
         </div>
         <div class="card overflow-x-auto !p-0">
           <table class="w-full font-mono text-[10px] sm:text-xs border-collapse" id="tradeTable">
@@ -260,14 +266,14 @@
       </section>
 
       <!-- ===== LOGS TAB ===== -->
-      <section id="tab-logs" class="tab-panel hidden">
-        <div class="flex gap-1 mb-2 items-center">
+      <section id="tab-logs" class="tab-panel hidden flex flex-col flex-1 min-h-0">
+        <div class="flex gap-1 mb-2 items-center shrink-0">
           <span class="font-mono text-[10px] md:text-xs text-text2" id="logCount">0 lines</span>
           <span class="flex-1"></span>
           <button class="btn btn-danger" onclick="window.clearLogs()">Clear</button>
         </div>
-        <div class="card !p-0">
-          <div id="logBox" class="max-h-[50vh] sm:max-h-[400px] overflow-y-auto">
+        <div class="card !p-0 flex-1 min-h-0 flex flex-col">
+          <div id="logBox" class="flex-1 min-h-0 overflow-y-auto">
             <div class="py-5 text-center text-muted font-mono text-[10px]">Loading...</div>
           </div>
         </div>

@@ -65,6 +65,10 @@ export async function clearLogsApi() {
   return postAction('clear-logs')
 }
 
+export async function clearTradesApi() {
+  return postAction('clear-trades')
+}
+
 export async function resetRisk() {
   return postAction('reset-risk')
 }

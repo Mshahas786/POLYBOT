@@ -21,10 +21,13 @@ const $ = (id) => document.getElementById(id)
 
 // ── Sync mobile status to desktop sidebar ──
 function syncDesktopStatus() {
-  const dot = $('statusDotEl')
-  if (dot) {
-    const desktop = $('statusDotEl-desktop')
-    if (desktop) desktop.innerHTML = dot.innerHTML
+  const label = $('serverLabel')
+  if (label) {
+    const desktop = $('serverLabel-desktop')
+    if (desktop) {
+      desktop.textContent = label.textContent
+      desktop.style.color = label.style.color
+    }
   }
   const state = $('engineState')
   if (state) {
@@ -43,7 +46,6 @@ function syncDesktopStatus() {
     }
   }
 }
-
 // ── Tab Switching ──
 function switchTab(tabName) {
   // Update sidebar tabs

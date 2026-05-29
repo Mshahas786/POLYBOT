@@ -29,14 +29,13 @@ export function render(data) {
   const isBlocked = blocked || streakBlocked
 
   // Status
-  const statusColor = isBlocked ? 'bg-accent shadow-[0_0_7px_rgba(240,180,41,0.5)]' : running ? 'bg-green shadow-[0_0_7px_rgba(0,229,160,0.5)]' : 'bg-red shadow-[0_0_7px_rgba(255,71,87,0.5)]'
-  $('statusDotEl').innerHTML = '<span class="inline-block w-[7px] h-[7px] rounded-full ' + statusColor + '"></span>'
+  const sl = $('serverLabel')
+  if (sl) {
+    sl.textContent = isBlocked ? 'Circuit Breaker' : 'Online'
+    sl.style.color = isBlocked ? 'var(--color-accent)' : 'var(--color-green)'
+  }
   $('engineState').textContent = running ? 'RUNNING' : 'STOPPED'
   $('engineState').style.color = running ? 'var(--color-green)' : 'var(--color-red)'
-
-  const mb = $('modeBadge')
-  mb.textContent = dry ? 'DRY RUN' : 'LIVE'
-  mb.className = 'text-[9px] px-2 py-[3px] rounded font-mono font-semibold border ' + (dry ? 'bg-blue/12 text-blue border-blue/20' : 'bg-green/12 text-green border-green/20')
 
   $('timeDisplay').textContent = new Date().toLocaleTimeString()
 
@@ -322,8 +321,17 @@ export async function fetchBayesian() {
     } else {
       bc.innerHTML = '<div class="py-8 text-center text-muted font-mono text-[10px]">No Bayesian data yet — run trades first</div>'
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { /* silent */ }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  const daysInput = $('daysInput')
+  if (daysInput) {
+    daysInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') window.setFilter('days')
+    })
+  }
+})
 
 // ── Logs ──
 export async function fetchLogs() {
@@ -339,7 +347,7 @@ export async function fetchLogs() {
       if (/ERROR|Fail|Error/.test(rest)) c = 'err'
       if (/WIN|SUCCESS/.test(rest)) c = 'ok'
       const colors = { info: 'text-text2', warn: 'text-accent', err: 'text-red', ok: 'text-green' }
-      return '<div class="flex gap-1.5 py-[3px] px-1.5 font-mono text-xs sm:text-[13px] border-b border-border/15"><span class="text-muted flex-shrink-0">' + ts + '</span><span class="' + (colors[c] || 'text-text2') + '">' + (rest || l) + '</span></div>'
+      return '<div class="flex gap-1.5 py-[3px] px-1.5 font-mono text-xs lg:text-sm border-b border-border/15"><span class="text-muted flex-shrink-0">' + ts + '</span><span class="' + (colors[c] || 'text-text2') + '">' + (rest || l) + '</span></div>'
     }).join('')
     $('logCount').textContent = logs.length + ' lines'
   } catch (e) { /* silent */ }
@@ -571,7 +579,8 @@ export function toast(msg, type) {
 }
 
 export function setOffline(err) {
-  $('statusDotEl').innerHTML = '<span class="inline-block w-[7px] h-[7px] rounded-full bg-red shadow-[0_0_7px_rgba(255,71,87,0.5)]"></span>'
+  const sl = $('serverLabel')
+  if (sl) { sl.textContent = 'Offline'; sl.style.color = 'var(--color-red)' }
   $('engineState').textContent = 'OFFLINE'
   $('engineState').style.color = 'var(--color-red)'
   $('btcPrice').textContent = '--'
@@ -598,6 +607,15 @@ window.clearLogs = async function () {
     await api.clearLogsApi()
     toast('Logs cleared', 'ok')
     fetchLogs()
+  } catch (e) { toast(e.message, 'err') }
+}
+
+window.clearTrades = async function () {
+  try {
+    await api.clearTradesApi()
+    toast('Trades cleared', 'ok')
+    tradeHistory = []
+    fetchTrades()
   } catch (e) { toast(e.message, 'err') }
 }
 
@@ -653,12 +671,42 @@ window.resetHard = async function () {
 }
 
 window.setFilter = function (f) {
+  if (f === 'days') {
+    const val = parseInt($('daysInput').value) || 7
+    f = val + 'd'
+  }
   window._tradeFilter = f
   document.querySelectorAll('#tab-trades .btn-filter').forEach(b => b.classList.remove('btn-filter-active'))
-  const idx = f === '1h' ? 0 : f === '24h' ? 1 : 2
-  const btns = document.querySelectorAll('#tab-trades .btn-filter')
-  if (btns[idx]) btns[idx].classList.add('btn-filter-active')
+  if (f === '1h') {
+    const btns = document.querySelectorAll('#tab-trades .btn-filter')
+    if (btns[0]) btns[0].classList.add('btn-filter-active')
+  } else if (f === '24h') {
+    const btns = document.querySelectorAll('#tab-trades .btn-filter')
+    if (btns[1]) btns[1].classList.add('btn-filter-active')
+  } else if (f === '7d') {
+    const btns = document.querySelectorAll('#tab-trades .btn-filter')
+    if (btns[2]) btns[2].classList.add('btn-filter-active')
+  } else if (f === '30d') {
+    const btns = document.querySelectorAll('#tab-trades .btn-filter')
+    if (btns[3]) btns[3].classList.add('btn-filter-active')
+  } else if (f.endsWith('d') && !['7d','30d'].includes(f)) {
+    document.querySelector('#filterAll')?.classList.add('btn-filter-active')
+  } else {
+    document.querySelector('#filterAll')?.classList.add('btn-filter-active')
+  }
   fetchTrades(f)
 }
 
 window.fetchBayesian = fetchBayesian
+
+window.adjDays = function (delta) {
+  const el = $('daysInput')
+  if (!el) return
+  const step = 1
+  const min = parseInt(el.min) || 1
+  const max = parseInt(el.max) || 365
+  let val = (parseFloat(el.value) || 1) + delta * step
+  val = Math.max(min, Math.min(max, val))
+  el.value = val
+  window.setFilter('days')
+}
