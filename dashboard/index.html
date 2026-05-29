@@ -17,24 +17,24 @@
     <div class="flex items-center gap-2 mb-6 px-1">
       <span class="w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_rgba(240,180,41,0.6)]"></span>
       <h1 class="font-mono text-sm font-bold text-accent tracking-wide">POLYBOT</h1>
-      <small class="font-mono text-[9px] text-muted mt-0.5" id="ver">v6.0</small>
+      <small class="font-mono text-[10px] md:text-xs text-muted mt-0.5" id="ver">v6.0</small>
     </div>
 
     <!-- Nav -->
     <nav class="flex flex-col gap-0.5 flex-1">
-      <button class="tab-btn sidebar-tab tab-active" data-tab="main">
+      <button class="tab-btn sidebar-tab text-xs lg:text-sm tab-active" data-tab="main">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         Dashboard
       </button>
-      <button class="tab-btn sidebar-tab" data-tab="trades">
+      <button class="tab-btn sidebar-tab text-xs lg:text-sm" data-tab="trades">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         Trades
       </button>
-      <button class="tab-btn sidebar-tab" data-tab="bayesian">
+      <button class="tab-btn sidebar-tab text-xs lg:text-sm" data-tab="bayesian">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
         Bayesian
       </button>
-      <button class="tab-btn sidebar-tab" data-tab="logs">
+      <button class="tab-btn sidebar-tab text-xs lg:text-sm" data-tab="logs">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Logs
       </button>
@@ -42,7 +42,7 @@
 
     <!-- Settings (bottom of nav) -->
     <div class="flex flex-col gap-1.5 pt-3 border-t border-border">
-      <button class="tab-btn sidebar-tab" data-tab="settings">
+      <button class="tab-btn sidebar-tab text-xs lg:text-sm" data-tab="settings">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Settings
       </button>
@@ -86,12 +86,12 @@
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_rgba(240,180,41,0.6)]"></span>
         <h1 class="font-mono text-xs font-bold text-accent tracking-wide">POLYBOT</h1>
-        <small class="font-mono text-[8px] text-muted" id="ver-mobile">v6.0</small>
+        <small class="font-mono text-[9px] md:text-[10px] font-semibold text-muted" id="ver-mobile">v6.0</small>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusDotEl"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
-        <span id="modeBadge" class="text-[8px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
-        <span id="engineState" class="font-mono text-[9px] text-red">STOPPED</span>
+        <span id="modeBadge" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+        <span id="engineState" class="font-mono text-[10px] md:text-xs text-red">STOPPED</span>
         <button id="themeToggle-mobile" class="ml-1 p-1 rounded hover:bg-white/5 transition-colors" onclick="window.toggleTheme()" title="Toggle theme">
           <svg class="w-3.5 h-3.5" id="themeIcon-mobile" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path class="sun-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
@@ -111,10 +111,10 @@
         <div class="hidden md:flex items-center justify-between mb-3">
           <div class="flex items-center gap-2.5">
             <span id="statusDotEl-desktop"><span class="inline-block w-[6px] h-[6px] rounded-full bg-red shadow-[0_0_5px_rgba(255,71,87,0.5)]"></span></span>
-            <span id="modeBadge-desktop" class="text-[8px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
-            <span id="engineState-desktop" class="font-mono text-[10px] text-red">STOPPED</span>
+            <span id="modeBadge-desktop" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">DRY RUN</span>
+            <span id="engineState-desktop" class="font-mono text-[10px] md:text-xs text-red">STOPPED</span>
           </div>
-          <span id="timeDisplay" class="font-mono text-[9px] text-muted"></span>
+          <span id="timeDisplay" class="font-mono text-[10px] md:text-xs text-muted"></span>
         </div>
 
         <!-- Price Cards -->
@@ -142,7 +142,7 @@
         <!-- Market Window + Signal -->
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-1.5 sm:gap-2 mb-2">
           <div class="lg:col-span-3 card">
-            <div class="card-header">Market Window</div>
+            <div class="card-header text-[10px] md:text-xs">Market Window</div>
             <div class="flex flex-col sm:flex-row gap-3 items-center sm:items-start">
               <div class="relative inline-flex items-center justify-center shrink-0">
                 <svg width="72" height="72" viewBox="0 0 80 80" class="-rotate-90">
@@ -164,7 +164,7 @@
           <div class="lg:col-span-2 card">
             <div class="card-header flex items-center gap-2">
               Current Signal
-              <span id="sigType" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">NONE</span>
+              <span id="sigType" class="text-[9px] md:text-[10px] px-2 py-[3px] rounded font-mono font-semibold bg-blue/12 text-blue border border-blue/20">NONE</span>
             </div>
             <div class="flex items-center gap-2 p-2 bg-surface2 rounded-lg border border-border mb-1.5">
               <div id="sigDir" class="font-mono text-base sm:text-lg font-bold min-w-[50px] text-text2">--</div>
@@ -173,14 +173,14 @@
               </div>
               <div id="sigConf" class="font-mono text-xs sm:text-sm font-semibold min-w-[35px] text-right text-text2">--</div>
             </div>
-            <div id="sigMeta" class="flex gap-1.5 flex-wrap font-mono text-[8px] sm:text-[9px] text-text2 leading-relaxed"></div>
+            <div id="sigMeta" class="flex gap-1.5 flex-wrap font-mono text-[10px] sm:text-xs text-text2 leading-relaxed"></div>
           </div>
         </div>
 
         <!-- Performance + Indicators -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 mb-2">
           <div class="card">
-            <div class="card-header">Performance</div>
+            <div class="card-header text-[10px] md:text-xs">Performance</div>
             <div class="stat-row"><span class="text-text2">Win Rate</span><span id="perfWR">--</span></div>
             <div class="stat-row"><span class="text-text2">Total Trades</span><span id="perfTotal">--</span></div>
             <div class="stat-row"><span class="text-text2">W / L</span><span id="perfWL">--</span></div>
@@ -190,7 +190,7 @@
             <canvas id="pnlSparkline" class="w-full h-[50px] mt-1.5 rounded"></canvas>
           </div>
           <div class="card">
-            <div class="card-header">Indicators</div>
+            <div class="card-header text-[10px] md:text-xs">Indicators</div>
             <div class="stat-row"><span class="text-text2">Wall Ratio</span><span id="indWall">--</span></div>
             <div class="stat-row"><span class="text-text2">Lag Score</span><span id="indLag">--</span></div>
             <div class="stat-row"><span class="text-text2">Momentum (60s)</span><span id="indMomentum">--</span></div>
@@ -205,12 +205,12 @@
           <div class="card">
             <div class="card-header flex items-center gap-1.5">
               Risk Management
-              <span id="riskBadge" class="text-[7px] px-2 py-[3px] rounded font-mono font-semibold bg-green/12 text-green border border-green/20">OK</span>
+              <span id="riskBadge" class="text-[9px] md:text-[10px] px-2 py-[3px] rounded font-mono font-semibold bg-green/12 text-green border border-green/20">OK</span>
             </div>
             <div id="riskContent"></div>
           </div>
           <div class="card">
-            <div class="card-header">Module Status</div>
+            <div class="card-header text-[10px] md:text-xs">Module Status</div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-1" id="moduleGrid"></div>
           </div>
         </div>
@@ -223,14 +223,14 @@
           <button class="btn-filter" onclick="window.setFilter('24h')">24H</button>
           <button class="btn-filter btn-filter-active" onclick="window.setFilter('all')" id="filterAll">ALL</button>
           <span class="flex-1"></span>
-          <span id="tradeSummary" class="font-mono text-[9px] text-text2"></span>
+          <span id="tradeSummary" class="font-mono text-[10px] md:text-xs text-text2"></span>
           <button class="btn" onclick="window.exportTrades('json')">JSON</button>
           <button class="btn" onclick="window.exportTrades('csv')">CSV</button>
         </div>
         <div class="card overflow-x-auto !p-0">
-          <table class="w-full font-mono text-[9px] sm:text-[10px] border-collapse" id="tradeTable">
+          <table class="w-full font-mono text-[10px] sm:text-xs border-collapse" id="tradeTable">
             <thead>
-              <tr class="text-muted text-[8px] uppercase tracking-wider">
+              <tr class="text-muted text-[9px] md:text-[10px] uppercase tracking-wider">
                 <th class="text-left px-2 py-1.5 border-b border-border font-medium whitespace-nowrap">Time</th>
                 <th class="text-left px-2 py-1.5 border-b border-border font-medium">Dir</th>
                 <th class="text-left px-2 py-1.5 border-b border-border font-medium">Size</th>
@@ -243,14 +243,14 @@
             </thead>
             <tbody id="tradeBody"></tbody>
           </table>
-          <div id="tradeEmpty" class="hidden py-8 text-center text-muted font-mono text-[10px]">No trades found</div>
+          <div id="tradeEmpty" class="hidden py-8 text-center text-muted font-mono text-[10px] md:text-xs">No trades found</div>
         </div>
       </section>
 
       <!-- ===== BAYESIAN TAB ===== -->
       <section id="tab-bayesian" class="tab-panel hidden">
         <div class="flex gap-1 mb-2 items-center">
-          <span class="font-mono text-[9px] text-text2">Signal bucket win rates (Bayesian)</span>
+          <span class="font-mono text-[10px] md:text-xs text-text2">Signal bucket win rates (Bayesian)</span>
           <span class="flex-1"></span>
           <button class="btn btn-warning" onclick="window.fetchBayesian()">Refresh</button>
         </div>
@@ -262,7 +262,7 @@
       <!-- ===== LOGS TAB ===== -->
       <section id="tab-logs" class="tab-panel hidden">
         <div class="flex gap-1 mb-2 items-center">
-          <span class="font-mono text-[9px] text-text2" id="logCount">0 lines</span>
+          <span class="font-mono text-[10px] md:text-xs text-text2" id="logCount">0 lines</span>
           <span class="flex-1"></span>
           <button class="btn btn-danger" onclick="window.clearLogs()">Clear</button>
         </div>
@@ -279,10 +279,10 @@
 
           <!-- Trading Config -->
           <div class="card mb-2">
-            <div class="card-header">Trading Config</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Core trade parameters, mode selection, and bet limits</p>
+            <div class="card-header text-[10px] md:text-xs">Trading Config</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Core trade parameters, mode selection, and bet limits</p>
             <div class="setting-row"><span title="Enable simulation mode — no real funds are used">Dry Run Mode</span><button id="toggleDry" class="toggle-switch toggle-on" onclick="window.toggleDry()"></button></div>
-            <div id="liveWarn" class="hidden mb-1.5 p-1.5 rounded text-[9px] font-mono bg-red/12 border border-red/25 text-red">&#9888; LIVE MODE</div>
+            <div id="liveWarn" class="hidden mb-1.5 p-1.5 rounded text-[10px] md:text-xs font-mono bg-red/12 border border-red/25 text-red">&#9888; LIVE MODE</div>
             <div class="setting-row"><span title="Fixed USDC amount wagered per trade">Bet Size (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBetSize', -0.5)">−</button><input id="sBetSize" type="number" value="1" min="0.1" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBetSize', 0.5)">+</button></div></div>
             <div class="setting-row"><span title="Maximum trades per hour">Max Trades / Hour</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxTrades', -1)">−</button><input id="sMaxTrades" type="number" value="12" min="1" max="50" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxTrades', 1)">+</button></div></div>
             <div class="setting-row"><span title="Minimum signal confidence (0-100%)">Min Confidence %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMinConf', -1)">−</button><input id="sMinConf" type="number" value="80" min="10" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMinConf', 1)">+</button></div></div>
@@ -291,8 +291,8 @@
 
           <!-- Risk Limits -->
           <div class="card mb-2">
-            <div class="card-header">Risk Limits</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Loss caps, drawdown limits, and position constraints</p>
+            <div class="card-header text-[10px] md:text-xs">Risk Limits</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Loss caps, drawdown limits, and position constraints</p>
             <div class="setting-row"><span title="Maximum daily loss (USDC) before halting">Daily Loss Limit (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sDailyLoss', -1)">−</button><input id="sDailyLoss" type="number" value="6" min="1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sDailyLoss', 1)">+</button></div></div>
             <div class="setting-row"><span title="Maximum hourly loss percentage">Hourly Loss %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHourlyLoss', -0.5)">−</button><input id="sHourlyLoss" type="number" value="5" min="0.5" max="50" step="0.5" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHourlyLoss', 0.5)">+</button></div></div>
             <div class="setting-row"><span title="Halt after N consecutive losses">Max Consecutive Losses</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxLossStreak', -1)">−</button><input id="sMaxLossStreak" type="number" value="4" min="1" max="10" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxLossStreak', 1)">+</button></div></div>
@@ -302,8 +302,8 @@
 
           <!-- Cooldowns & Feed -->
           <div class="card mb-2">
-            <div class="card-header">Cooldowns &amp; Feed</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Rest intervals and data-fetch timing</p>
+            <div class="card-header text-[10px] md:text-xs">Cooldowns &amp; Feed</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Rest intervals and data-fetch timing</p>
             <div class="setting-row"><span title="Seconds to pause after a loss">Cooldown After Loss (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sCooldown', -1)">−</button><input id="sCooldown" type="number" value="300" min="0" max="3600" class="setting-input" /><button class="adj-btn" onclick="window.adj('sCooldown', 1)">+</button></div></div>
             <div class="setting-row"><span title="Pause at end of each hour">Hourly Cooldown (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHourlyCooldown', -1)">−</button><input id="sHourlyCooldown" type="number" value="3600" min="60" max="86400" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHourlyCooldown', 1)">+</button></div></div>
             <div class="setting-row"><span title="Stale feed threshold">Stale Feed (s)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sStaleFeed', -1)">−</button><input id="sStaleFeed" type="number" value="60" min="10" max="300" class="setting-input" /><button class="adj-btn" onclick="window.adj('sStaleFeed', 1)">+</button></div></div>
@@ -316,8 +316,8 @@
 
           <!-- Bet Sizing -->
           <div class="card mb-2">
-            <div class="card-header">Bet Sizing</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Position size percentages and Kelly criterion</p>
+            <div class="card-header text-[10px] md:text-xs">Bet Sizing</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Position size percentages and Kelly criterion</p>
             <div class="setting-row"><span title="Base bet as % of bankroll">Base Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sBaseBetPct', -0.1)">−</button><input id="sBaseBetPct" type="number" value="1" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sBaseBetPct', 0.1)">+</button></div></div>
             <div class="setting-row"><span title="High-confidence bet as % of bankroll">High-Conf Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sHighConfBetPct', -0.1)">−</button><input id="sHighConfBetPct" type="number" value="2" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sHighConfBetPct', 0.1)">+</button></div></div>
             <div class="setting-row"><span title="Arbitrage bet as % of bankroll">Arb Bet %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sArbBetPct', -0.1)">−</button><input id="sArbBetPct" type="number" value="5" min="0.1" max="20" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sArbBetPct', 0.1)">+</button></div></div>
@@ -327,16 +327,16 @@
 
           <!-- Bankroll -->
           <div class="card mb-2">
-            <div class="card-header">Bankroll</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Starting capital and max token price</p>
+            <div class="card-header text-[10px] md:text-xs">Bankroll</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Starting capital and max token price</p>
             <div class="setting-row"><span title="Starting balance for %-based sizing">Initial Bankroll (USDC)</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sInitBankroll', -1)">−</button><input id="sInitBankroll" type="number" value="100" min="10" class="setting-input" /><button class="adj-btn" onclick="window.adj('sInitBankroll', 1)">+</button></div></div>
             <div class="setting-row"><span title="Max token price (0-1)">Max Token Price</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sMaxTokenPrice', -0.01)">−</button><input id="sMaxTokenPrice" type="number" value="0.92" min="0.5" max="0.99" step="0.01" class="setting-input" /><button class="adj-btn" onclick="window.adj('sMaxTokenPrice', 0.01)">+</button></div></div>
           </div>
 
           <!-- Guards -->
           <div class="card mb-2">
-            <div class="card-header">Guards</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Toxic flow, edge lag, and market integrity</p>
+            <div class="card-header text-[10px] md:text-xs">Guards</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Toxic flow, edge lag, and market integrity</p>
             <div class="setting-row"><span title="Max Chainlink lag % before blocking">Toxic Lag %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sToxicLag', -0.1)">−</button><input id="sToxicLag" type="number" value="1.0" min="0.1" max="10" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sToxicLag', 0.1)">+</button></div></div>
             <div class="setting-row"><span title="Upper bound for favorable oracle lag">Edge Lag Max %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeLagMax', -0.1)">−</button><input id="sEdgeLagMax" type="number" value="1.5" min="0.1" max="5" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeLagMax', 0.1)">+</button></div></div>
             <div class="setting-row"><span title="Lower bound for favorable oracle lag">Edge Lag Min %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sEdgeLagMin', -0.1)">−</button><input id="sEdgeLagMin" type="number" value="0.3" min="0.1" max="2" step="0.1" class="setting-input" /><button class="adj-btn" onclick="window.adj('sEdgeLagMin', 0.1)">+</button></div></div>
@@ -344,16 +344,16 @@
 
           <!-- Auto-Stop -->
           <div class="card mb-2">
-            <div class="card-header">Auto-Stop</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Automatic halt based on win rate</p>
+            <div class="card-header text-[10px] md:text-xs">Auto-Stop</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Automatic halt based on win rate</p>
             <div class="setting-row"><span title="Recent trades used for win rate">Win Rate Lookback</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWinRateLb', -1)">−</button><input id="sWinRateLb" type="number" value="20" min="5" max="100" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWinRateLb', 1)">+</button></div></div>
             <div class="setting-row"><span title="Win rate below this halts trading">Win Rate Threshold %</span><div class="flex items-center gap-0.5"><button class="adj-btn" onclick="window.adj('sWinRateThresh', -1)">−</button><input id="sWinRateThresh" type="number" value="45" min="10" max="90" class="setting-input" /><button class="adj-btn" onclick="window.adj('sWinRateThresh', 1)">+</button></div></div>
           </div>
 
           <!-- Signal Modules -->
           <div class="card mb-2">
-            <div class="card-header">Signal Modules</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Toggle individual signal strategies</p>
+            <div class="card-header text-[10px] md:text-xs">Signal Modules</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Toggle individual signal strategies</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
               <div class="setting-row"><span title="Exploit price discrepancies between tokens">Arbitrage</span><button id="modSignalArb" class="toggle-switch toggle-on" onclick="window.toggleMod('modSignalArb')"></button></div>
               <div class="setting-row"><span title="Override signal on extreme delta">Delta Override</span><button id="modDeltaOverride" class="toggle-switch toggle-on" onclick="window.toggleMod('modDeltaOverride')"></button></div>
@@ -374,8 +374,8 @@
 
           <!-- Trading Guards -->
           <div class="card mb-2">
-            <div class="card-header">Trading Guards</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Trade validation filters and safety checks</p>
+            <div class="card-header text-[10px] md:text-xs">Trading Guards</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Trade validation filters and safety checks</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
               <div class="setting-row"><span title="Require sustained momentum">Momentum Consistency</span><button id="guardMomentum" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardMomentum')"></button></div>
               <div class="setting-row"><span title="Block trades in high volatility">Volatility Guard</span><button id="guardVolatility" class="toggle-switch toggle-on" onclick="window.toggleGuard('guardVolatility')"></button></div>
@@ -391,8 +391,8 @@
 
           <!-- Strategy Tuning -->
           <div class="card mb-2">
-            <div class="card-header">Strategy Tuning</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Detection thresholds for each signal module</p>
+            <div class="card-header text-[10px] md:text-xs">Strategy Tuning</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Detection thresholds for each signal module</p>
             <details class="group" open>
               <summary class="flex items-center gap-1.5 py-2 px-1 text-[10px] font-mono text-text2 cursor-pointer hover:text-text transition-colors border-b border-border/20">
                 <svg class="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -519,8 +519,8 @@
 
           <!-- API Credentials -->
           <div class="card mb-2">
-            <div class="card-header">API Credentials</div>
-            <p class="text-[8px] font-mono text-text2 mb-1.5">Polymarket wallet keys, API credentials, and RPC settings</p>
+            <div class="card-header text-[10px] md:text-xs">API Credentials</div>
+            <p class="text-[10px] md:text-xs font-mono text-text2 mb-1.5">Polymarket wallet keys, API credentials, and RPC settings</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
               <div class="setting-row sm:col-span-2"><span title="Wallet private key (0x-prefixed)">Private Key</span><input id="env-POLY_PRIVATE_KEY" type="password" class="setting-input" style="width:280px" /></div>
               <div class="setting-row sm:col-span-2"><span title="Polymarket wallet address">Wallet Address</span><input id="env-POLY_WALLET_ADDRESS" type="text" class="setting-input" style="width:280px" /></div>
@@ -554,7 +554,7 @@
 
           <!-- Actions -->
           <div class="card mb-2">
-            <div class="card-header">Actions</div>
+            <div class="card-header text-[10px] md:text-xs">Actions</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
               <button class="btn btn-primary" onclick="window.ctrl('start')">&#9654; Start</button>
               <button class="btn btn-danger" onclick="window.ctrl('stop')">&#9632; Stop</button>
@@ -564,7 +564,7 @@
             </div>
           </div>
 
-          <div class="text-[8px] text-muted text-center py-3 font-mono">
+          <div class="text-[10px] md:text-xs text-muted text-center py-3 font-mono">
             PolyBot v6.0 &mdash; Polymarket BTC Up/Down 5m
           </div>
         </div>
@@ -577,19 +577,19 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         <span>Dashboard</span>
       </button>
-      <button class="bottom-tab tab-btn" data-tab="trades">
+      <button class="bottom-tab tab-btn text-[9px]" data-tab="trades">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         <span>Trades</span>
       </button>
-      <button class="bottom-tab tab-btn" data-tab="bayesian">
+      <button class="bottom-tab tab-btn text-[9px]" data-tab="bayesian">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
         <span>Bayesian</span>
       </button>
-      <button class="bottom-tab tab-btn" data-tab="logs">
+      <button class="bottom-tab tab-btn text-[9px]" data-tab="logs">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         <span>Logs</span>
       </button>
-      <button class="bottom-tab tab-btn" data-tab="settings">
+      <button class="bottom-tab tab-btn text-[9px]" data-tab="settings">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         <span>Settings</span>
       </button>
